@@ -6,6 +6,7 @@ import "../interfaces/CompoundInterfaces.sol";
 
 contract CompoundTokenMap {
   IComptroller public immutable comptroller;
+  address public immutable weth;
   bytes32 public constant compoundEtherNameHash = keccak256(
     bytes(
       string("Compound Ether")
@@ -20,8 +21,9 @@ contract CompoundTokenMap {
     return allUnderlyings;
   }
 
-  constructor(address _comptroller) {
+  constructor(address _comptroller, address _weth) {
     comptroller = IComptroller(_comptroller);
+    weth = _weth;
   }
 
   function mapCToken(ICToken cToken) internal {
@@ -39,8 +41,8 @@ contract CompoundTokenMap {
       ICToken cToken = _cTokens[i++];
       if (keccak256(bytes(cToken.name())) == compoundEtherNameHash) {
         foundEther = true;
-        cTokens[address(0)] = address(cToken);
-        allUnderlyings.push(address(0));
+        cTokens[weth] = address(cToken);
+        allUnderlyings.push(weth);
       } else {
         mapCToken(cToken);
       }
