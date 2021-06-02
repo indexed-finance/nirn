@@ -3,11 +3,6 @@ pragma solidity >=0.5.0;
 pragma abicoder v2;
 
 
-interface ISupply {
-  function totalSupply() external view returns (uint256);
-}
-
-
 interface ILendingPoolAddressesProvider {
   function getLendingPool() external view returns (ILendingPool);
 }
@@ -69,4 +64,17 @@ interface ILendingPool {
   function getReserveData(address asset) external view returns (ReserveData memory);
 
   function getReservesList() external view returns (address[] memory);
+
+  function deposit(
+    address asset,
+    uint256 amount,
+    address onBehalfOf,
+    uint16 referralCode
+  ) external;
+
+  function withdraw(
+    address asset,
+    uint256 amount,
+    address to
+  ) external;
 }

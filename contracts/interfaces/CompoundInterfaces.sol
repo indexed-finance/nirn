@@ -6,12 +6,22 @@ pragma abicoder v2;
 interface ICToken {
   function underlying() external view returns (address);
   function name() external view returns (string memory);
+
   function supplyRatePerBlock() external view returns (uint256);
+
   function getCash() external view returns (uint256);
   function totalBorrows() external view returns (uint256);
   function totalReserves() external view returns (uint256);
   function reserveFactorMantissa() external view returns (uint256);
+  function exchangeRateCurrent() external returns (uint256);
+  function exchangeRateStored() external view returns (uint256);
+
   function interestRateModel() external view returns (IInterestRateModel);
+  function balanceOf(address account) external view returns (uint256);
+  function mint(uint256 mintAmount) external returns (uint256);
+  function mint() external payable returns (uint256);
+  function redeem(uint256 tokenAmount) external returns (uint256);
+  function redeemUnderlying(uint256 underlyingAmount) external returns (uint256);
 }
 
 

@@ -24,10 +24,17 @@ interface IReserveInterestRateStrategy {
 
 interface ILendingPoolAddressesProvider {
   function getLendingPoolCore() external view returns (ILendingPoolCore);
+  function getLendingPool() external view returns (ILendingPool);
 }
 
 
+interface ILendingPool {
+  function deposit(address reserve, uint256 amount, uint16 referralCode) external;
+  function redeemUnderlying(address reserve, address user, uint256 amount, uint256 aTokenBalanceAfterRedeem) external;
+}
+
 interface ILendingPoolCore {
+  function getReserves() external view returns (address[] memory);
   function getReserveCurrentLiquidityRate(address token) external view returns (uint256);
   function getReserveAvailableLiquidity(address token) external view returns (uint256);
   function getReserveTotalBorrowsStable(address token) external view returns (uint256);
