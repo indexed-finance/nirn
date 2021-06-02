@@ -29,6 +29,10 @@ abstract contract AbstractErc20Adapter {
     _approve();
   }
 
+/* ========== Internal Queries ========== */
+
+  function _protocolName() internal view virtual returns (string memory);
+
 /* ========== Metadata ========== */
 
   function name() external view virtual returns (string memory) {
@@ -53,10 +57,6 @@ abstract contract AbstractErc20Adapter {
   }
 
   function underlyingBalance() external view virtual returns (uint256);
-
-/* ========== Internal Queries ========== */
-
-  function _protocolName() internal view virtual returns (string memory);
 
 /* ========== Token Actions ========== */
 
@@ -114,8 +114,7 @@ abstract contract AbstractEtherAdapter is AbstractErc20Adapter {
   function name() external view virtual override returns (string memory) {
     return string(abi.encodePacked(
       bytes(_protocolName()),
-      " ",
-      "Ether Adapter"
+      " Ether Adapter"
     ));
   }
 
