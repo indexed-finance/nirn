@@ -2,13 +2,12 @@
 pragma solidity =0.7.6;
 pragma abicoder v2;
 
-import "../interfaces/DyDxInterfaces.sol";
-import "../interfaces/ITokenAdapter.sol";
-import "../interfaces/IERC20Metadata.sol";
-import "../interfaces/IWETH.sol";
-import "../libraries/LowGasSafeMath.sol";
-import "../libraries/TransferHelper.sol";
-import "../libraries/CloneLibrary.sol";
+import "../../interfaces/DyDxInterfaces.sol";
+import "../../interfaces/ITokenAdapter.sol";
+import "../../interfaces/IERC20Metadata.sol";
+import "../../libraries/LowGasSafeMath.sol";
+import "../../libraries/TransferHelper.sol";
+import "../../libraries/CloneLibrary.sol";
 
 
 contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
@@ -21,6 +20,7 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
   IDyDx public immutable dydx;
 
 /* ========== Storage ========== */
+
   string public override name;
   address public override underlying;
   address public override token;
@@ -117,36 +117,6 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
     amountBurned = withdraw(amountUnderlying);
-  }
-}
-
-
-contract DyDxEtherAdapter is DyDxErc20Adapter {
-  using TransferHelper for address;
-  
-  /* ========== Constructor & Initializer ========== */
-  
-  constructor(IDyDx _dydx) DyDxErc20Adapter(_dydx) {}
-
-/* ========== Token Actions ========== */
-
-  function depositETH() external payable virtual returns (uint256 amountMinted) {
-    IWETH(underlying).deposit{value: msg.value}();
-    amountMinted = deposit(msg.value);
-  }
-
-  function withdrawAsETH(uint256 amountToken) public virtual returns (uint256 amountReceived) {
-    amountReceived = amountToken;
-    _withdraw(amountToken, false);
-    IWETH(underlying).withdraw(amountReceived);
-    address(msg.sender).safeTransferETH(amountReceived);
-  }
-
-  function withdrawUnderlyingAsETH(uint256 amountUnderlying) external virtual returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying;
-    _withdraw(amountUnderlying, false);
-    IWETH(underlying).withdraw(amountUnderlying);
-    address(msg.sender).safeTransferETH(amountUnderlying);
   }
 }
 
