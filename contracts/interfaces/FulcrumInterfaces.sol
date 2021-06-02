@@ -16,4 +16,6 @@ interface IToken {
   function burn(address receiver, uint256 burnAmount) external returns (uint256 loanAmountPaid);
   function assetBalanceOf(address _owner) external view returns (uint256 balance);
   function tokenPrice() external view returns (uint256);
+  function mintWithEther(address receiver) external payable returns (uint256 mintAmount);
+  function burnToEther(address receiver, uint256 burnAmount) external returns (uint256 loanAmountPaid);
 }
