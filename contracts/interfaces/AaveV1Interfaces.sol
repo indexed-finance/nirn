@@ -29,7 +29,7 @@ interface ILendingPoolAddressesProvider {
 
 
 interface ILendingPool {
-  function deposit(address reserve, uint256 amount, uint16 referralCode) external;
+  function deposit(address reserve, uint256 amount, uint16 referralCode) external payable;
   function redeemUnderlying(address reserve, address user, uint256 amount, uint256 aTokenBalanceAfterRedeem) external;
 }
 
