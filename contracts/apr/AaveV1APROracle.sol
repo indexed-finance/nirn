@@ -21,23 +21,24 @@ contract AaveV1APROracle {
     apr = core.getReserveCurrentLiquidityRate(token) / 1e9;
   }
 
-  function getHypotheticalAPR(address token, uint256 deposit) external view returns (uint256 apr) {
+/*   function getHypotheticalAPR(address token, uint256 deposit) external view returns (uint256 apr) {
     ILendingPoolCore core = aave.getLendingPoolCore();
     uint256 totalBorrowsStable = core.getReserveTotalBorrowsStable(token);
     uint256 totalBorrowsVariable = core.getReserveTotalBorrowsVariable(token);
     uint256 totalBorrows = totalBorrowsStable.add(totalBorrowsVariable);
+    uint256 utilizationRate = totalBorrows == 0
+      ? 0
+      : totalBorrows.rayDiv(core.getReserveAvailableLiquidity(token).add(deposit).add(totalBorrows));
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(token).calculateInterestRates(
       token,
       // Utilization rate
-      totalBorrows == 0
-        ? 0
-        : totalBorrows.rayDiv(core.getReserveAvailableLiquidity(token).add(deposit).add(totalBorrows)),
+      utilizationRate,
       totalBorrowsStable,
       totalBorrowsVariable,
       core.getReserveCurrentAverageStableBorrowRate(token)
     );
     return liquidityRate / 1e9;
-  }
+  } */
 }
 
 
