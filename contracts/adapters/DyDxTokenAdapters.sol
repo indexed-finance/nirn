@@ -2,15 +2,16 @@
 pragma solidity =0.7.6;
 pragma abicoder v2;
 
-import "./AbstractTokenAdapter.sol";
 import "../interfaces/DyDxInterfaces.sol";
+import "../interfaces/ITokenAdapter.sol";
+import "../interfaces/IERC20Metadata.sol";
 import "../interfaces/IWETH.sol";
 import "../libraries/LowGasSafeMath.sol";
 import "../libraries/TransferHelper.sol";
 import "../libraries/CloneLibrary.sol";
 
 
-contract DyDxErc20Adapter is AbstractErc20Adapter(), DyDxStructs {
+contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
@@ -20,21 +21,30 @@ contract DyDxErc20Adapter is AbstractErc20Adapter(), DyDxStructs {
   IDyDx public immutable dydx;
 
 /* ========== Storage ========== */
-
+  string public override name;
+  address public override underlying;
+  address public override token;
   address public dydxUserModuleImplementation;
   uint256 public marketId;
   mapping(address => address) public userModules;
 
 /* ========== Constructor & Initializer ========== */
 
-  constructor(IDyDx _dydx) AbstractErc20Adapter() {
+  constructor(IDyDx _dydx) {
     dydx = _dydx;
   }
 
-  function initialize(address _underlying, uint256 _marketId) external {
-    super.initialize(_underlying, _underlying);
+  function initialize(address _underlying, uint256 _marketId) external virtual {
+    underlying = _underlying;
+    token = _underlying;
     marketId = _marketId;
     dydxUserModuleImplementation = address(new DyDxUserModule(dydx, _marketId));
+    name = string(abi.encodePacked(
+      "DyDx ",
+      bytes(IERC20Metadata(underlying).symbol()),
+      " Adapter"
+    ));
+    underlying.safeApprove(address(dydx), type(uint256).max);
   }
 
 /* ========== User Modules ========== */
@@ -85,12 +95,6 @@ contract DyDxErc20Adapter is AbstractErc20Adapter(), DyDxStructs {
     return tokenBalance();
   }
 
-/* ========== Internal Queries ========== */
-
-  function _protocolName() internal pure virtual override returns (string memory) {
-    return "DyDx";
-  }
-
 /* ========== Token Actions ========== */
 
   function deposit(uint256 amountUnderlying) public virtual override returns (uint256 amountMinted) {
@@ -114,16 +118,6 @@ contract DyDxErc20Adapter is AbstractErc20Adapter(), DyDxStructs {
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
     amountBurned = withdraw(amountUnderlying);
   }
-
-/* ========== Internal Actions ========== */
-
-  function _approve() internal virtual override {}
-
-  function _mint(uint256 amountUnderlying) internal virtual override returns (uint256) {}
-
-  function _burn(uint256 amountToken) internal virtual override returns (uint256) {}
-
-  function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256) {}
 }
 
 
