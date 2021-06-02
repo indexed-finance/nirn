@@ -80,6 +80,7 @@ contract CErc20Adapter is AbstractErc20Adapter() {
   }
 }
 
+
 contract CEtherAdapter is AbstractEtherAdapter() {
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
