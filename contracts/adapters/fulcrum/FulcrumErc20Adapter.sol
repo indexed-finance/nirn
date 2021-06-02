@@ -2,15 +2,43 @@
 pragma solidity =0.7.6;
 pragma abicoder v2;
 
-import "./AbstractTokenAdapter.sol";
-import "../interfaces/FulcrumInterfaces.sol";
-import "../libraries/LowGasSafeMath.sol";
-import "../libraries/TransferHelper.sol";
+import "../../interfaces/ITokenAdapter.sol";
+import "../../interfaces/FulcrumInterfaces.sol";
+import "../../interfaces/IERC20Metadata.sol";
+import "../../interfaces/IERC20.sol";
+import "../../libraries/LowGasSafeMath.sol";
+import "../../libraries/TransferHelper.sol";
 
 
-contract FulcrumErc20Adapter is AbstractErc20Adapter() {
+contract FulcrumErc20Adapter is IErc20Adapter {
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
+
+  /* ========== Storage ========== */
+
+  string public override name;
+  address public override underlying;
+  address public override token;
+
+/* ========== Constructor & Initializer ========== */
+
+  constructor() {
+    underlying = address(1);
+    token = address(1);
+  }
+
+  function initialize(address _underlying, address _token) public virtual {
+    require(underlying == address(0) && token == address(0), "initialized");
+    require(_underlying != address(0) && _token != address(0), "bad address");
+    underlying = _underlying;
+    token = _token;
+    name = string(abi.encodePacked(
+      "Fulcrum ",
+      bytes(IERC20Metadata(_underlying).symbol()),
+      " Adapter"
+    ));
+    _underlying.safeApprove(token, type(uint256).max);
+  }
 
 /* ========== Performance Queries ========== */
 
@@ -24,14 +52,12 @@ contract FulcrumErc20Adapter is AbstractErc20Adapter() {
 
 /* ========== Caller Balance Queries ========== */
 
-  function underlyingBalance() external view virtual override returns (uint256) {
-    return IToken(token).assetBalanceOf(msg.sender);
+  function tokenBalance() external view virtual override returns (uint256) {
+    return IERC20(token).balanceOf(msg.sender);
   }
 
-/* ========== Internal Queries ========== */
-
-  function _protocolName() internal pure virtual override returns (string memory) {
-    return "Fulcrum";
+  function underlyingBalance() external view virtual override returns (uint256) {
+    return IToken(token).assetBalanceOf(msg.sender);
   }
 
 /* ========== Token Actions ========== */
@@ -52,18 +78,6 @@ contract FulcrumErc20Adapter is AbstractErc20Adapter() {
     uint256 currentPrice = IToken(token).tokenPrice();
     amountBurned = amountUnderlying.mul(1e18) / currentPrice;
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
-    require(IToken(token).burn(address(this), amountBurned) > 0, "IToken: Burn failed");
+    require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
   }
-
-/* ========== Internal Actions ========== */
-
-  function _approve() internal virtual override {
-    underlying.safeApprove(token, type(uint256).max);
-  }
-
-  function _mint(uint256 amountUnderlying) internal virtual override returns (uint256) {}
-
-  function _burn(uint256 amountToken) internal virtual override returns (uint256) {}
-
-  function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256) {}
 }
