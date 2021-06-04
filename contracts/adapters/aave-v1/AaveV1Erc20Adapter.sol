@@ -3,7 +3,6 @@ pragma solidity =0.7.6;
 
 import "../AbstractErc20Adapter.sol";
 import "../../interfaces/AaveV1Interfaces.sol";
-import "../../interfaces/IWETH.sol";
 import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
