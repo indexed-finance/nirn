@@ -35,6 +35,7 @@ interface ILendingPool {
 
 interface ILendingPoolCore {
   function getReserves() external view returns (address[] memory);
+  function getReserveATokenAddress(address) external view returns (address);
   function getReserveCurrentLiquidityRate(address token) external view returns (uint256);
   function getReserveAvailableLiquidity(address token) external view returns (uint256);
   function getReserveTotalBorrowsStable(address token) external view returns (uint256);
