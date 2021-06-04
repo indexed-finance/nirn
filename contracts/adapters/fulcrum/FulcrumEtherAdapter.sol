@@ -21,18 +21,13 @@ contract FulcrumEtherAdapter is IEtherAdapter {
 
 /* ========== Storage ========== */
 
-  string public override name;
+  string public override name = "Fulcrum Ether Adapter";
 
 /* ========== Constructor & Initializer ========== */
 
   constructor(address _underlying, address _token) {
     underlying = _underlying;
     token = _token;
-    name = string(abi.encodePacked(
-      "Fulcrum ",
-      bytes(IERC20Metadata(_underlying).symbol()),
-      " Adapter"
-    ));
     _underlying.safeApprove(token, type(uint256).max);
   }
 
