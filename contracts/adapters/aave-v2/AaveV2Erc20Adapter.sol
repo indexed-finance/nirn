@@ -10,9 +10,11 @@ import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/RayMul.sol";
 import "../../libraries/ReserveConfigurationLib.sol";
+import "../../libraries/SignedAddition.sol";
 
 
 contract AaveV2Erc20Adapter is AbstractErc20Adapter {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using RayMul for uint256;
   using TransferHelper for address;
@@ -41,18 +43,18 @@ contract AaveV2Erc20Adapter is AbstractErc20Adapter {
     apr = reserve.currentLiquidityRate / 1e9;
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256 apr) {
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     ILendingPool pool = aave.getLendingPool();
     ILendingPool.ReserveData memory reserve = pool.getReserveData(underlying);
+
+    uint256 availableLiquidity = IERC20(underlying).balanceOf(reserve.aTokenAddress).add(liquidityDelta);
     uint256 totalVariableDebt = reserve.variableDebtToken.scaledTotalSupply()
       .rayMul(reserve.variableBorrowIndex);
     (uint256 totalStableDebt, uint256 avgStableRate) = reserve.stableDebtToken
       .getTotalSupplyAndAvgRate();
     (uint256 liquidityRate, ,) = reserve.interestRateStrategy.calculateInterestRates(
       underlying,
-      reserve.aTokenAddress,
-      _deposit,
-      0,
+      availableLiquidity,
       totalStableDebt,
       totalVariableDebt,
       avgStableRate,

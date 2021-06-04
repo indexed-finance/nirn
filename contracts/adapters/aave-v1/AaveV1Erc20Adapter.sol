@@ -6,10 +6,12 @@ import "../../interfaces/AaveV1Interfaces.sol";
 import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
+import "../../libraries/SignedAddition.sol";
 import "../../libraries/RayDiv.sol";
 
 
 contract AaveV1Erc20Adapter is AbstractErc20Adapter {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using RayDiv for uint256;
   using TransferHelper for address;
@@ -30,21 +32,15 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
     apr = aave.getLendingPoolCore().getReserveCurrentLiquidityRate(underlying) / 1e9;
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256 apr) {
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
+    address reserve = underlying;
     ILendingPoolCore core = aave.getLendingPoolCore();
-    uint256 totalBorrowsStable = core.getReserveTotalBorrowsStable(underlying);
-    uint256 totalBorrowsVariable = core.getReserveTotalBorrowsVariable(underlying);
-    uint256 totalBorrows = totalBorrowsStable.add(totalBorrowsVariable);
-    uint256 utilizationRate = totalBorrows == 0
-      ? 0
-      : totalBorrows.rayDiv(core.getReserveAvailableLiquidity(underlying).add(_deposit).add(totalBorrows));
-    (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(underlying).calculateInterestRates(
-      token,
-      // Utilization rate
-      utilizationRate,
-      totalBorrowsStable,
-      totalBorrowsVariable,
-      core.getReserveCurrentAverageStableBorrowRate(underlying)
+    (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(reserve).calculateInterestRates(
+      reserve,
+      core.getReserveAvailableLiquidity(reserve).add(liquidityDelta),
+      core.getReserveTotalBorrowsStable(reserve),
+      core.getReserveTotalBorrowsVariable(reserve),
+      core.getReserveCurrentAverageStableBorrowRate(reserve)
     );
     return liquidityRate / 1e9;
   }

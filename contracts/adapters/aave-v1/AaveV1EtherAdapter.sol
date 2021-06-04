@@ -7,10 +7,12 @@ import "../../interfaces/IWETH.sol";
 import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
+import "../../libraries/SignedAddition.sol";
 import "../../libraries/RayDiv.sol";
 
 
 contract AaveV1EtherAdapter is AbstractEtherAdapter {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using RayDiv for uint256;
   using TransferHelper for address;
@@ -39,20 +41,13 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
     apr = aave.getLendingPoolCore().getReserveCurrentLiquidityRate(ETH_RESERVE_ADDRESS) / 1e9;
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256 apr) {
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     ILendingPoolCore core = aave.getLendingPoolCore();
-    uint256 totalBorrowsStable = core.getReserveTotalBorrowsStable(ETH_RESERVE_ADDRESS);
-    uint256 totalBorrowsVariable = core.getReserveTotalBorrowsVariable(ETH_RESERVE_ADDRESS);
-    uint256 totalBorrows = totalBorrowsStable.add(totalBorrowsVariable);
-    uint256 utilizationRate = totalBorrows == 0
-      ? 0
-      : totalBorrows.rayDiv(core.getReserveAvailableLiquidity(ETH_RESERVE_ADDRESS).add(_deposit).add(totalBorrows));
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(ETH_RESERVE_ADDRESS).calculateInterestRates(
-      token,
-      // Utilization rate
-      utilizationRate,
-      totalBorrowsStable,
-      totalBorrowsVariable,
+      ETH_RESERVE_ADDRESS,
+      core.getReserveAvailableLiquidity(ETH_RESERVE_ADDRESS).add(liquidityDelta),
+      core.getReserveTotalBorrowsStable(ETH_RESERVE_ADDRESS),
+      core.getReserveTotalBorrowsVariable(ETH_RESERVE_ADDRESS),
       core.getReserveCurrentAverageStableBorrowRate(ETH_RESERVE_ADDRESS)
     );
     return liquidityRate / 1e9;
