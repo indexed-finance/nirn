@@ -1,5 +1,20 @@
 # @indexed-finance/apr-oracles
 
+Smart contracts for on-chain APR queries.
+
+Currently supports:
+- Aave V1
+- Aave V2
+- Compound
+- Cream
+- DyDx
+- Fulcrum (bzx)
+- Rari Fuse
+
+**Note on Ether**
+
+If a lending pool or other interest-bearing asset is tracked by a protocol, it *must* use the address of WETH for the adapter's underlying token.
+
 ## Scripts
 
 `yarn test`
