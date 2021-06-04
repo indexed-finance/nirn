@@ -24,9 +24,16 @@ export default {
       default: 0,
     },
   },
+  mocha: {
+    timeout: 200000
+  },
   networks: {
     hardhat: {
       allowUnlimitedContractSize: false,
+      forking: {
+        url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
+        blockNumber: 12486505
+      }
     },
     mainnet: configureNetwork('mainnet', 1),
     kovan: configureNetwork('kovan', 42),
@@ -37,7 +44,7 @@ export default {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 800,
       },
       metadata: {
         bytecodeHash: 'none',
