@@ -7,10 +7,12 @@ import "../../interfaces/ITokenAdapter.sol";
 import "../../interfaces/IERC20Metadata.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
+import "../../libraries/SymbolHelper.sol";
 import "../../libraries/CloneLibrary.sol";
 
 
 contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
+  using SymbolHelper for address;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
@@ -21,7 +23,6 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
 
 /* ========== Storage ========== */
 
-  string public override name;
   address public override underlying;
   address public override token;
   address public dydxUserModuleImplementation;
@@ -39,12 +40,17 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
     token = _underlying;
     marketId = _marketId;
     dydxUserModuleImplementation = address(new DyDxUserModule(dydx, _marketId));
-    name = string(abi.encodePacked(
+    underlying.safeApprove(address(dydx), type(uint256).max);
+  }
+
+/* ========== Metadata Queries ========== */
+
+  function name() external view override returns (string memory) {
+    return string(abi.encodePacked(
       "DyDx ",
-      bytes(IERC20Metadata(underlying).symbol()),
+      underlying.getSymbol(),
       " Adapter"
     ));
-    underlying.safeApprove(address(dydx), type(uint256).max);
   }
 
 /* ========== User Modules ========== */

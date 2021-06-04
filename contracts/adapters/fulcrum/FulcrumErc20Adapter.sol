@@ -8,15 +8,16 @@ import "../../interfaces/IERC20Metadata.sol";
 import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
+import "../../libraries/SymbolHelper.sol";
 
 
 contract FulcrumErc20Adapter is IErc20Adapter {
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
+  using SymbolHelper for address;
 
-  /* ========== Storage ========== */
+/* ========== Storage ========== */
 
-  string public override name;
   address public override underlying;
   address public override token;
 
@@ -32,12 +33,17 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     require(_underlying != address(0) && _token != address(0), "bad address");
     underlying = _underlying;
     token = _token;
-    name = string(abi.encodePacked(
+    _underlying.safeApprove(token, type(uint256).max);
+  }
+
+/* ========== Metadata Queries ========== */
+
+  function name() external view override returns (string memory) {
+    return string(abi.encodePacked(
       "Fulcrum ",
-      bytes(IERC20Metadata(_underlying).symbol()),
+      underlying.getSymbol(),
       " Adapter"
     ));
-    _underlying.safeApprove(token, type(uint256).max);
   }
 
 /* ========== Performance Queries ========== */

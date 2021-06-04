@@ -2,11 +2,13 @@
 pragma solidity =0.7.6;
 
 import "../libraries/TransferHelper.sol";
+import "../libraries/SymbolHelper.sol";
 import "../interfaces/IERC20Metadata.sol";
 import "../interfaces/IERC20.sol";
 
 
 abstract contract AbstractErc20Adapter {
+  using SymbolHelper for address;
   using TransferHelper for address;
 
 /* ========== Storage ========== */
@@ -39,7 +41,7 @@ abstract contract AbstractErc20Adapter {
     return string(abi.encodePacked(
       bytes(_protocolName()),
       " ",
-      bytes(IERC20Metadata(underlying).symbol()),
+      bytes(underlying.getSymbol()),
       " Adapter"
     ));
   }
