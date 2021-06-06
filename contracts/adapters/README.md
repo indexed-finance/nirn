@@ -4,7 +4,7 @@ Adapters are the points of contact between a contract using our yield optimizati
 
 There are two interfaces for these adapters - one for tokens that wrap non-WETH ERC20s, and one for tokens that wrap either Ether or Wrapped Ether.
 
-The contracts `AbstractErc20Adapter` and `AbstractEtherAdapter` have been written to simplify the process of writing new adapters. They define several external functions that individual implementations should generally not need to overwrite, with the exception of `getAPR`, `getHypotheticalAPR` and `underlyingBalance`.
+The contracts `AbstractErc20Adapter` and `AbstractEtherAdapter` have been written to simplify the process of writing new adapters. They define several external functions that individual implementations should generally not need to overwrite, with the exception of `getAPR`, `getHypotheticalAPR` and `balanceUnderlying`.
 
 # ERC20 Adapter Methods
 
@@ -32,9 +32,9 @@ Returns the annualized interest or yield rate for the wrapper token.
 
 Returns the annualized interest or yield rate that the wrapper token would have if an additional `_deposit` underlying tokens were deposited to it. For lending protocols, this can be calculated by referencing their interest rate models; for yield-aggregators, this can be estimated by diluting its growth.
 
-#### `function underlyingBalance() external view returns (uint256)` **(Requires Overwrite)**
+#### `function balanceUnderlying() external view returns (uint256)` **(Requires Overwrite)**
 
-Returns the value of the caller's balance in the wrapper token in terms of the underlying token; i.e. the instantly liquidatable value of `tokenBalance`
+Returns the value of the caller's balance in the wrapper token in terms of the underlying token; i.e. the instantly liquidatable value of `balanceWrapped`
 
 #### `function underlying() external view returns (address)`
 
@@ -44,7 +44,7 @@ Returns the address of the underlying asset.
 
 Returns the address of the wrapper asset.
 
-#### `function tokenBalance() external view returns (uint256)`
+#### `function balanceWrapped() external view returns (uint256)`
 
 Returns the balance of the caller in the wrapper token.
 
