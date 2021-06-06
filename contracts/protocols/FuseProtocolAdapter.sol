@@ -2,14 +2,15 @@
 pragma solidity =0.7.6;
 pragma abicoder v2;
 
+import "./FuseTokenAdapterFactory.sol";
 import "./FusePoolAdapter.sol";
-import "../interfaces/IFusePoolDirectory.sol";
+import "../interfaces/FuseInterfaces.sol";
 
 
 contract FuseProtocolAdapter {
   IFusePoolDirectory public immutable directory = IFusePoolDirectory(0x835482FE0532f169024d5E9410199369aAD5C77E);
   IAdapterRegistry public immutable registry;
-  CTokenAdapterFactory public adapterFactory;
+  FuseTokenAdapterFactory public immutable adapterFactory;
   address public immutable adapterImplementation;
   string public protocol = "Rari Fuse";
   uint256 public totalMapped;
@@ -17,11 +18,11 @@ contract FuseProtocolAdapter {
 
   constructor(
     IAdapterRegistry _registry,
-    CTokenAdapterFactory _adapterFactory
+    FuseTokenAdapterFactory _adapterFactory
   ) {
     registry = _registry;
     adapterFactory = _adapterFactory;
-    adapterImplementation = address(new FusePoolAdapter());
+    adapterImplementation = address(new FusePoolAdapter(_registry, _adapterFactory));
   }
 
   function getUnmapped() public view returns (IFusePoolDirectory.FusePool[] memory fusePools) {
@@ -50,7 +51,7 @@ contract FuseProtocolAdapter {
         privatePools.push(address(pool));
       } else {
         FusePoolAdapter adapter = FusePoolAdapter(CloneLibrary.createClone(adapterImplementation));
-        adapter.initialize(registry, IComptroller(address(pool)), adapterFactory, fusePools[i].name);
+        adapter.initialize(IFusePool(address(pool)), fusePools[i].name);
         registry.addProtocolAdapter(address(adapter));
       }
     }

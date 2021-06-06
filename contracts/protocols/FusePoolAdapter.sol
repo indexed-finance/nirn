@@ -1,65 +1,60 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
-import "../interfaces/CompoundInterfaces.sol";
+import "../interfaces/FuseInterfaces.sol";
 import "../interfaces/IAdapterRegistry.sol";
-import "./CTokenAdapterFactory.sol";
+import "./FuseTokenAdapterFactory.sol";
 
 
 contract FusePoolAdapter {
   address public immutable fuseProtocolAdapter;
+  IAdapterRegistry public immutable registry;
+  FuseTokenAdapterFactory public immutable factory;
 
-  IComptroller public comptroller;
-  IAdapterRegistry public registry;
-  CTokenAdapterFactory public adapterFactory;
-
+  IFusePool public pool;
   string public protocol;
   uint256 public totalMapped;
 
-  constructor() {
+  constructor(
+    IAdapterRegistry _registry,
+    FuseTokenAdapterFactory _factory
+  ) {
+    registry = _registry;
+    factory = _factory;
     fuseProtocolAdapter = msg.sender;
   }
 
-  function initialize(
-    IAdapterRegistry _registry,
-    IComptroller _comptroller,
-    CTokenAdapterFactory _adapterFactory,
-    string memory fusePoolName
-  ) external {
+  function initialize(IFusePool _pool, string memory fusePoolName) external {
     require(msg.sender == fuseProtocolAdapter, "!fuse adapter");
-    require(address(registry) == address(0), "already initialized");
-    registry = _registry;
-    comptroller = _comptroller;
-    adapterFactory = _adapterFactory;
+    require(address(pool) == address(0), "already initialized");
+    pool = _pool;
     protocol = fusePoolName;
   }
 
-  function getUnmapped() public view returns (ICToken[] memory cTokens) {
-    cTokens = comptroller.getAllMarkets();
-    uint256 len = cTokens.length;
+  function getUnmapped() public view returns (IFToken[] memory fTokens) {
+    fTokens = pool.getAllMarkets();
+    uint256 len = fTokens.length;
     uint256 prevLen = totalMapped;
     if (len == prevLen) {
-      assembly { mstore(cTokens, 0) }
+      assembly { mstore(fTokens, 0) }
     } else {
       assembly {
-        cTokens := add(cTokens, mul(prevLen, 32))
-        mstore(cTokens, sub(len, prevLen))
+        fTokens := add(fTokens, mul(prevLen, 32))
+        mstore(fTokens, sub(len, prevLen))
       }
     }
   }
 
   function map(uint256 max) external {
-    ICToken[] memory cTokens = getUnmapped();
-    uint256 len = cTokens.length;
+    IFToken[] memory fTokens = getUnmapped();
+    uint256 len = fTokens.length;
     string memory fusePoolName = protocol;
     if (max < len) {
       len = max;
     }
-    IAdapterRegistry _registry = registry;
-    CTokenAdapterFactory _factory = adapterFactory;
     for (uint256 i = 0; i < len; i++) {
-      (,address adapter) = _factory.deployAdapter(cTokens[i], fusePoolName);
-      _registry.addTokenAdapter(adapter);
+      (,address adapter) = factory.deployAdapter(fTokens[i], fusePoolName);
+      registry.addTokenAdapter(adapter);
     }
     totalMapped += len;
   }
