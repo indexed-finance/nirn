@@ -7,9 +7,12 @@ import "../../interfaces/IERC20.sol";
 import "../../interfaces/IWETH.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
+import "../../libraries/SignedAddition.sol";
+import { CTokenParams } from "../../libraries/CTokenParams.sol";
 
 
 contract CErc20Adapter is AbstractErc20Adapter() {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
@@ -41,31 +44,40 @@ contract CErc20Adapter is AbstractErc20Adapter() {
     return ICToken(token).supplyRatePerBlock().mul(2102400);
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256) {
-    IInterestRateModel model = ICToken(token).interestRateModel();
-    return model.getSupplyRate(
-      ICToken(token).getCash().add(_deposit),
-      ICToken(token).totalBorrows(),
-      ICToken(token).totalReserves(),
-      ICToken(token).reserveFactorMantissa()
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
+    ICToken cToken = ICToken(token);
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = CTokenParams.getInterestRateParameters(address(cToken));
+    return IInterestRateModel(model).getSupplyRate(
+      cashPrior.addMin0(liquidityDelta),
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa
     ).mul(2102400);
   }
 
 /* ========== Caller Balance Queries ========== */
 
-  function underlyingBalance() external view virtual override returns (uint256) {
-    return ICToken(token).balanceOf(msg.sender).mul(ICToken(token).exchangeRateStored()) / 1e18;
+  function balanceUnderlying() external view virtual override returns (uint256) {
+    address _token = token;
+    return ICToken(_token).balanceOf(msg.sender).mul(ICToken(_token).exchangeRateStored()) / 1e18;
   }
 
 /* ========== Internal Actions ========== */
 
   function _approve() internal virtual override {
-    underlying.safeApprove(address(token), type(uint256).max);
+    underlying.safeApproveMax(token);
   }
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
-    require(ICToken(token).mint(amountUnderlying) == 0, "CErc20: Mint failed");
-    amountMinted = IERC20(token).balanceOf(address(this));
+    address _token = token;
+    require(ICToken(_token).mint(amountUnderlying) == 0, "CErc20: Mint failed");
+    amountMinted = IERC20(_token).balanceOf(address(this));
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {

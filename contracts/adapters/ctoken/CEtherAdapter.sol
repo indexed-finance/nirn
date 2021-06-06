@@ -7,9 +7,12 @@ import "../../interfaces/IERC20.sol";
 import "../../interfaces/IWETH.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
+import "../../libraries/SignedAddition.sol";
+import { CTokenParams } from "../../libraries/CTokenParams.sol";
 
 
 contract CEtherAdapter is AbstractEtherAdapter() {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
@@ -41,19 +44,27 @@ contract CEtherAdapter is AbstractEtherAdapter() {
     return ICToken(token).supplyRatePerBlock().mul(2102400);
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256) {
-    IInterestRateModel model = ICToken(token).interestRateModel();
-    return model.getSupplyRate(
-      ICToken(token).getCash().add(_deposit),
-      ICToken(token).totalBorrows(),
-      ICToken(token).totalReserves(),
-      ICToken(token).reserveFactorMantissa()
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
+    ICToken cToken = ICToken(token);
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = CTokenParams.getInterestRateParameters(address(cToken));
+
+    return IInterestRateModel(model).getSupplyRate(
+      cashPrior.addMin0(liquidityDelta),
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa
     ).mul(2102400);
   }
 
 /* ========== Caller Balance Queries ========== */
 
-  function underlyingBalance() external view virtual override returns (uint256) {
+  function balanceUnderlying() external view virtual override returns (uint256) {
     return ICToken(token).balanceOf(msg.sender).mul(ICToken(token).exchangeRateStored()) / 1e18;
   }
 
@@ -78,10 +89,14 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 /* ========== Internal Actions ========== */
 
   function _approve() internal virtual override {}
-
+  // Compound LINK Adapter | deposit(100) GAS 332447 | balanceWrapped() 0.000000998849938881 GAS 32012 | balanceUnderlying() 200.00003684326894141 GAS 48346
+  // Compound WBTC Adapter | deposit(10) GAS 365016 | balanceWrapped() 499.59124833 GAS 32012 | balanceUnderlying() 9.99999999 GAS 48488
+  // Cream AAVE Adapter | deposit(100) GAS 542018 | balanceWrapped() 0.00000096870869565 GAS 31076 | balanceUnderlying() 200.000258393601241108 GAS 43096
+  // Cream COMP Adapter | deposit(100) GAS 310990 | balanceWrapped() 0.000000927905663439 GAS 31076 | balanceUnderlying() 200.000093071756167403 GAS 43096
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
-    require(ICToken(token).mint{value: amountUnderlying}() == 0, "CEther: Mint failed");
-    amountMinted = IERC20(token).balanceOf(address(this));
+    address _token = token;
+    require(ICToken(_token).mint{value: amountUnderlying}() == 0, "CEther: Mint failed");
+    amountMinted = IERC20(_token).balanceOf(address(this));
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
