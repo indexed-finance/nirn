@@ -11,15 +11,17 @@ interface IErc20Adapter {
 
   function getAPR() external view returns (uint256);
 
-  function getHypotheticalAPR(uint256 _deposit) external view returns (uint256);
+  function getHypotheticalAPR(int256 liquidityDelta) external view returns (uint256);
 
-  function tokenBalance() external view returns (uint256);
+  function balanceWrapped() external view returns (uint256);
 
-  function underlyingBalance() external view returns (uint256);
+  function balanceUnderlying() external view returns (uint256);
 
   function deposit(uint256 amountUnderlying) external returns (uint256 amountMinted);
 
   function withdraw(uint256 amountToken) external returns (uint256 amountReceived);
+
+  function withdrawAll() external returns (uint256 amountReceived);
 
   function withdrawUnderlying(uint256 amountUnderlying) external returns (uint256 amountBurned);
 }
@@ -28,6 +30,8 @@ interface IEtherAdapter is IErc20Adapter {
   function depositETH() external payable returns (uint256 amountMinted);
 
   function withdrawAsETH(uint256 amountToken) external returns (uint256 amountReceived);
+
+  function withdrawAllAsETH() external returns (uint256 amountReceived);
 
   function withdrawUnderlyingAsETH(uint256 amountUnderlying) external returns (uint256 amountBurned); 
 }
