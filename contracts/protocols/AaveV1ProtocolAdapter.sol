@@ -53,6 +53,7 @@ contract AaveV1ProtocolAdapter {
     if (i >= stopAt) return;
     for (; i < stopAt; i++) {
       address underlying = reserves[i];
+      if (core.getReserveIsFreezed(underlying)) continue;
       address adapter;
       if (underlying == ETH_RESERVE_ADDRESS) {
         adapter = CloneLibrary.createClone(etherAdapterImplementation);
