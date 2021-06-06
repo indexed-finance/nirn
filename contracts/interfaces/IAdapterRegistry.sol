@@ -28,5 +28,11 @@ interface IAdapterRegistry {
     view
     returns (address[] memory adapters, uint256[] memory aprs);
 
-  function highestAPRAdapter(address underlying) external view returns (address adapter, uint256 apr);
+  function getAdapterWithHighestAPR(address underlying) external view returns (address adapter, uint256 apr);
+
+  function getAdapterWithHighestAPRForDeposit(
+    address underlying,
+    uint256 deposit,
+    address excludingAdapter
+  ) external view returns (address adapter, uint256 apr);
 }

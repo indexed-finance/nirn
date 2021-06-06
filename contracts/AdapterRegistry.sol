@@ -11,28 +11,83 @@ import "./interfaces/IProtocolAdapter.sol";
 contract AdapterRegistry is Ownable() {
   using SortLibrary for address[];
 
+/* ========== Structs ========== */
+
   struct Protocol {
     address protocolAdapter;
     address[] tokenAdapters;
   }
 
+/* ========== Storage ========== */
+
+  // Array of protocol adapters
   Protocol[] internal protocols;
+  // Protocol adapter to its ID
   mapping(address => uint256) internal protocolIds;
   // All adapters for a given underlying token
   mapping(address => address[]) internal tokenAdapters;
+  // All supported underlying tokens
   address[] internal supportedTokens;
+
+/* ========== Constructor ========== */
 
   constructor() public {
     Protocol memory protocol;
     protocols.push(protocol);
   }
 
+/* ========== Modifiers ========== */
+
   modifier onlyProtocolOrOwner {
     require(protocolIds[msg.sender] > 0 || msg.sender == owner(), "!approved");
     _;
   }
 
-  function getProtocolCount() external view returns (uint256) {
+/* ========== Protocol Adapter Management ========== */
+
+  function addProtocolAdapter(address protocolAdapter) external onlyProtocolOrOwner {
+    require(protocolIds[protocolAdapter] == 0, "adapter exists");
+    uint256 id = protocols.length;
+    Protocol memory protocol;
+    protocol.protocolAdapter = protocolAdapter;
+    protocols.push(protocol);
+    protocolIds[protocolAdapter] = id;
+  }
+
+/* ========== Token Adapter Management ========== */
+
+  function addTokenAdapter(IErc20Adapter adapter) external {
+    uint256 id = protocolIds[msg.sender];
+    require(id > 0, "!protocolAdapter");
+    address underlying = adapter.underlying();
+    if (tokenAdapters[underlying].length == 0) {
+      supportedTokens.push(underlying);
+    }
+    tokenAdapters[underlying].push(address(adapter));
+  }
+
+  function addTokenAdapters(IErc20Adapter[] calldata adapters) external {
+    uint256 id = protocolIds[msg.sender];
+    require(id > 0, "!protocolAdapter");
+    uint256 len = adapters.length;
+    for (uint256 i = 0; i < len; i++) {
+      IErc20Adapter adapter = adapters[i];
+      address underlying = adapter.underlying();
+      if (tokenAdapters[underlying].length == 0) {
+        supportedTokens.push(underlying);
+      }
+      tokenAdapters[underlying].push(address(adapter));
+    }
+  }
+
+  function sortAdapters(address underlying) external {
+    (address[] memory adapters,) = getAdaptersSortedByAPR(underlying);
+    tokenAdapters[underlying] = adapters;
+  }
+
+/* ========== Protocol Queries ========== */
+
+  function getProtocolsCount() external view returns (uint256) {
     return protocols.length;
   }
 
@@ -56,6 +111,8 @@ contract AdapterRegistry is Ownable() {
     name = IProtocolAdapter(protocolAdapter).protocol();
   }
 
+/* ========== Supported Token Queries ========== */
+
   function isSupported(address underlying) external view returns (bool) {
     return tokenAdapters[underlying].length > 0;
   }
@@ -64,29 +121,15 @@ contract AdapterRegistry is Ownable() {
     list = supportedTokens;
   }
 
+/* ========== Token Adapter Queries ========== */
+
   function getAdaptersList(address underlying) public view returns (address[] memory list) {
     list = tokenAdapters[underlying];
     require(list.length > 0, "!adapters");
   }
 
-  function addTokenAdapter(IErc20Adapter adapter) external {
-    uint256 id = protocolIds[msg.sender];
-    require(id > 0, "!protocolAdapter");
-    address underlying = adapter.underlying();
-    if (tokenAdapters[underlying].length == 0) {
-      supportedTokens.push(underlying);
-    }
-    tokenAdapters[underlying].push(address(adapter));
-    // protocols[id].tokenAdapters.push(address(adapter));
-  }
-
-  function addProtocolAdapter(address protocolAdapter) external onlyProtocolOrOwner {
-    require(protocolIds[protocolAdapter] == 0, "adapter exists");
-    uint256 id = protocols.length;
-    Protocol memory protocol;
-    protocol.protocolAdapter = protocolAdapter;
-    protocols.push(protocol);
-    protocolIds[protocolAdapter] = id;
+  function getAdaptersCount(address underlying) external view returns (uint256) {
+    return tokenAdapters[underlying].length;
   }
 
   function getAdaptersSortedByAPR(address underlying)
@@ -128,7 +171,7 @@ contract AdapterRegistry is Ownable() {
           aprs[i] = 0;
         }
       } else {
-        try IErc20Adapter(adapter).getHypotheticalAPR(deposit) returns (uint256 apr) {
+        try IErc20Adapter(adapter).getHypotheticalAPR(int256(deposit)) returns (uint256 apr) {
           aprs[i] = apr;
         } catch {
           aprs[i] = 0;
@@ -138,13 +181,13 @@ contract AdapterRegistry is Ownable() {
     adapters.sortByDescendingScore(aprs);
   }
 
-  function highestAPRAdapter(address underlying) external view returns (address adapter, uint256 apr) {
+  function getAdapterWithHighestAPR(address underlying) external view returns (address adapter, uint256 apr) {
     (address[] memory adapters, uint256[] memory aprs) = getAdaptersSortedByAPR(underlying);
     adapter = adapters[0];
     apr = aprs[0];
   }
 
-  function highestAPRAdapterForDeposit(
+  function getAdapterWithHighestAPRForDeposit(
     address underlying,
     uint256 deposit,
     address excludingAdapter
