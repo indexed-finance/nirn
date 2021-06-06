@@ -45,27 +45,25 @@ contract AaveV2EtherAdapter is AbstractEtherAdapter {
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     ILendingPool pool = aave.getLendingPool();
-    ILendingPool.ReserveData memory reserve = pool.getReserveData(underlying);
-
-    uint256 availableLiquidity = IERC20(underlying).balanceOf(reserve.aTokenAddress).add(liquidityDelta);
-    uint256 totalVariableDebt = reserve.variableDebtToken.scaledTotalSupply()
-      .rayMul(reserve.variableBorrowIndex);
-    (uint256 totalStableDebt, uint256 avgStableRate) = reserve.stableDebtToken
-      .getTotalSupplyAndAvgRate();
-    (uint256 liquidityRate, ,) = reserve.interestRateStrategy.calculateInterestRates(
-      underlying,
+    address reserve = underlying;
+    ILendingPool.ReserveData memory data = pool.getReserveData(reserve);
+    uint256 availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).addMin0(liquidityDelta);
+    uint256 totalVariableDebt = data.variableDebtToken.scaledTotalSupply().rayMul(data.variableBorrowIndex);
+    (uint256 totalStableDebt, uint256 avgStableRate) = data.stableDebtToken.getTotalSupplyAndAvgRate();
+    (uint256 liquidityRate, ,) = data.interestRateStrategy.calculateInterestRates(
+      reserve,
       availableLiquidity,
       totalStableDebt,
       totalVariableDebt,
       avgStableRate,
-      ReserveConfigurationLib.getReserveFactor(reserve.configuration)
+      ReserveConfigurationLib.getReserveFactor(data.configuration)
     );
     return liquidityRate / 1e9;
   }
 
 /* ========== Caller Balance Queries ========== */
 
-  function underlyingBalance() external view virtual override returns (uint256) {
+  function balanceUnderlying() external view virtual override returns (uint256) {
     return IERC20(token).balanceOf(msg.sender);
   }
 
@@ -86,7 +84,7 @@ contract AaveV2EtherAdapter is AbstractEtherAdapter {
 /* ========== Internal Actions ========== */
 
   function _approve() internal virtual override {
-    underlying.safeApprove(address(aave.getLendingPool()), type(uint256).max);
+    underlying.safeApproveMax(address(aave.getLendingPool()));
   }
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
