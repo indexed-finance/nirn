@@ -6,7 +6,7 @@ pragma abicoder v2;
 interface IReserveInterestRateStrategy {
   function calculateInterestRates(
     address _reserve,
-    uint256 _utilizationRate,
+    uint256 _availableLiquidity,
     uint256 _totalBorrowsStable,
     uint256 _totalBorrowsVariable,
     uint256 _averageStableBorrowRate
@@ -30,11 +30,12 @@ interface ILendingPoolAddressesProvider {
 
 interface ILendingPool {
   function deposit(address reserve, uint256 amount, uint16 referralCode) external payable;
-  function redeemUnderlying(address reserve, address user, uint256 amount, uint256 aTokenBalanceAfterRedeem) external;
+  function redeemUnderlying(address reserve, address user, uint256 amount, uint256 abalanceWrappedAfterRedeem) external;
 }
 
 interface ILendingPoolCore {
   function getReserves() external view returns (address[] memory);
+  function getReserveIsFreezed(address _reserve) external view returns (bool);
   function getReserveATokenAddress(address) external view returns (address);
   function getReserveCurrentLiquidityRate(address token) external view returns (uint256);
   function getReserveAvailableLiquidity(address token) external view returns (uint256);
