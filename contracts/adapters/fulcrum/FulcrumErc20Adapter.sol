@@ -9,9 +9,11 @@ import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/SymbolHelper.sol";
+import "../../libraries/SignedAddition.sol";
 
 
 contract FulcrumErc20Adapter is IErc20Adapter {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
   using SymbolHelper for address;
@@ -33,7 +35,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     require(_underlying != address(0) && _token != address(0), "bad address");
     underlying = _underlying;
     token = _token;
-    _underlying.safeApprove(token, type(uint256).max);
+    _underlying.safeApproveMax(token);
   }
 
 /* ========== Metadata Queries ========== */
@@ -52,17 +54,20 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     return IToken(token).supplyInterestRate() / 100;
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256 apr) {
-    return IToken(token).nextSupplyInterestRate(_deposit) / 100;
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
+    IToken iToken = IToken(token);
+    return iToken.totalSupplyInterestRate(
+      iToken.totalAssetSupply().addMin0(liquidityDelta)
+    ) / 100;
   }
 
 /* ========== Caller Balance Queries ========== */
 
-  function tokenBalance() external view virtual override returns (uint256) {
+  function balanceWrapped() external view virtual override returns (uint256) {
     return IERC20(token).balanceOf(msg.sender);
   }
 
-  function underlyingBalance() external view virtual override returns (uint256) {
+  function balanceUnderlying() external view virtual override returns (uint256) {
     return IToken(token).assetBalanceOf(msg.sender);
   }
 
@@ -75,8 +80,17 @@ contract FulcrumErc20Adapter is IErc20Adapter {
   }
 
   function withdraw(uint256 amountToken) external virtual override returns (uint256 amountReceived) {
-    token.safeTransferFrom(msg.sender, address(this), amountToken);
-    amountReceived = IToken(token).burn(msg.sender, amountToken);
+    address _token = token;
+    _token.safeTransferFrom(msg.sender, address(this), amountToken);
+    amountReceived = IToken(_token).burn(msg.sender, amountToken);
+    require(amountReceived > 0, "IToken: Burn failed");
+  }
+
+  function withdrawAll() external virtual override returns (uint256 amountReceived) {
+    address _token = token;
+    uint256 amountToken = IERC20(_token).balanceOf(msg.sender);
+    _token.safeTransferFrom(msg.sender, address(this), amountToken);
+    amountReceived = IToken(_token).burn(msg.sender, amountToken);
     require(amountReceived > 0, "IToken: Burn failed");
   }
 
