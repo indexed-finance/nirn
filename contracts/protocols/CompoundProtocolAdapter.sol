@@ -12,7 +12,8 @@ contract CompoundProtocolAdapter {
   CTokenAdapterFactory public immutable adapterFactory;
 
   string public protocol = "Compound";
-  uint256 public totalMapped;
+  // @todo Add support for cBAT
+  uint256 public totalMapped = 1;
 
   constructor(
     IAdapterRegistry _registry,
