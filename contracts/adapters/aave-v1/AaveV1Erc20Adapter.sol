@@ -37,7 +37,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
     ILendingPoolCore core = aave.getLendingPoolCore();
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(reserve).calculateInterestRates(
       reserve,
-      core.getReserveAvailableLiquidity(reserve).add(liquidityDelta),
+      core.getReserveAvailableLiquidity(reserve).addMin0(liquidityDelta),
       core.getReserveTotalBorrowsStable(reserve),
       core.getReserveTotalBorrowsVariable(reserve),
       core.getReserveCurrentAverageStableBorrowRate(reserve)
@@ -47,7 +47,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 
 /* ========== Caller Balance Queries ========== */
 
-  function underlyingBalance() external view virtual override returns (uint256) {
+  function balanceUnderlying() external view virtual override returns (uint256) {
     return IERC20(token).balanceOf(msg.sender);
   }
 
@@ -60,7 +60,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 /* ========== Internal Actions ========== */
 
   function _approve() internal virtual override {
-    underlying.safeApprove(address(aave.getLendingPoolCore()), type(uint256).max);
+    underlying.safeApproveMax(address(aave.getLendingPoolCore()));
   }
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {

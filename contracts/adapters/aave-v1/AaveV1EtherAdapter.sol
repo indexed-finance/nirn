@@ -45,7 +45,7 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
     ILendingPoolCore core = aave.getLendingPoolCore();
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(ETH_RESERVE_ADDRESS).calculateInterestRates(
       ETH_RESERVE_ADDRESS,
-      core.getReserveAvailableLiquidity(ETH_RESERVE_ADDRESS).add(liquidityDelta),
+      core.getReserveAvailableLiquidity(ETH_RESERVE_ADDRESS).addMin0(liquidityDelta),
       core.getReserveTotalBorrowsStable(ETH_RESERVE_ADDRESS),
       core.getReserveTotalBorrowsVariable(ETH_RESERVE_ADDRESS),
       core.getReserveCurrentAverageStableBorrowRate(ETH_RESERVE_ADDRESS)
@@ -55,7 +55,7 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
 /* ========== Caller Balance Queries ========== */
 
-  function underlyingBalance() external view virtual override returns (uint256) {
+  function balanceUnderlying() external view virtual override returns (uint256) {
     return IERC20(token).balanceOf(msg.sender);
   }
 
