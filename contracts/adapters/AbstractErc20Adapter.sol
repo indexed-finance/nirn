@@ -50,15 +50,15 @@ abstract contract AbstractErc20Adapter {
 
   function getAPR() external view virtual returns (uint256);
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual returns (uint256);
+  function getHypotheticalAPR(int256 _deposit) external view virtual returns (uint256);
 
 /* ========== Caller Balance Queries ========== */
 
-  function tokenBalance() external view virtual returns (uint256) {
+  function balanceWrapped() public view virtual returns (uint256) {
     return IERC20(token).balanceOf(msg.sender);
   }
 
-  function underlyingBalance() external view virtual returns (uint256);
+  function balanceUnderlying() external view virtual returns (uint256);
 
 /* ========== Token Actions ========== */
 
@@ -68,10 +68,14 @@ abstract contract AbstractErc20Adapter {
     token.safeTransfer(msg.sender, amountMinted);
   }
 
-  function withdraw(uint256 amountToken) external virtual returns (uint256 amountReceived) {
+  function withdraw(uint256 amountToken) public virtual returns (uint256 amountReceived) {
     token.safeTransferFrom(msg.sender, address(this), amountToken);
     amountReceived = _burn(amountToken);
     underlying.safeTransfer(msg.sender, amountReceived);
+  }
+
+  function withdrawAll() public virtual returns (uint256 amountReceived) {
+    return withdraw(balanceWrapped());
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual returns (uint256 amountBurned) {
