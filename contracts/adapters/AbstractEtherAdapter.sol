@@ -34,18 +34,22 @@ abstract contract AbstractEtherAdapter is AbstractErc20Adapter {
     token.safeTransfer(msg.sender, amountMinted);
   }
 
-  function withdraw(uint256 amountToken) external virtual override returns (uint256 amountReceived) {
+  function withdraw(uint256 amountToken) public virtual override returns (uint256 amountReceived) {
     token.safeTransferFrom(msg.sender, address(this), amountToken);
     amountReceived = _burn(amountToken);
     _beforeSendWETH(amountReceived);
     underlying.safeTransfer(msg.sender, amountReceived);
   }
 
-  function withdrawAsETH(uint256 amountToken) external virtual returns (uint256 amountReceived) {
+  function withdrawAsETH(uint256 amountToken) public virtual returns (uint256 amountReceived) {
     token.safeTransferFrom(msg.sender, address(this), amountToken);
     amountReceived = _burn(amountToken);
     _beforeSendETH(amountReceived);
     address(msg.sender).safeTransferETH(amountReceived);
+  }
+
+  function withdrawAllAsETH() public virtual returns (uint256 amountReceived) {
+    return withdrawAsETH(balanceWrapped());
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
