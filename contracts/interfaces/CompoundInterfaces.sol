@@ -15,6 +15,7 @@ interface ICToken {
   function reserveFactorMantissa() external view returns (uint256);
   function exchangeRateCurrent() external returns (uint256);
   function exchangeRateStored() external view returns (uint256);
+  function accrualBlockNumber() external view returns (uint256);
 
   function interestRateModel() external view returns (IInterestRateModel);
   function balanceOf(address account) external view returns (uint256);
@@ -26,6 +27,12 @@ interface ICToken {
 
 
 interface IInterestRateModel {
+  function getBorrowRate(
+    uint cash,
+    uint borrows,
+    uint reserves
+  ) external view returns (uint);
+
   function getSupplyRate(
     uint256 cash,
     uint256 borrows,
