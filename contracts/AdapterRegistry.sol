@@ -31,7 +31,7 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Constructor ========== */
 
-  constructor() public {
+  constructor() {
     Protocol memory protocol;
     protocols.push(protocol);
   }
@@ -88,7 +88,7 @@ contract AdapterRegistry is Ownable() {
 /* ========== Protocol Queries ========== */
 
   function getProtocolsCount() external view returns (uint256) {
-    return protocols.length;
+    return protocols.length - 1;
   }
 
   function getProtocolAdapters() external view returns (address[] memory adapters) {
