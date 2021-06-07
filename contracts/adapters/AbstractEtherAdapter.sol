@@ -15,9 +15,15 @@ abstract contract AbstractEtherAdapter is AbstractErc20Adapter {
   function name() external view virtual override returns (string memory) {
     return string(abi.encodePacked(
       bytes(_protocolName()),
-      " Ether Adapter"
+      " ETH Adapter"
     ));
   }
+
+/* ========== Fallback ========== */
+
+  fallback() external payable { return; }
+
+  receive() external payable { return; }
 
 /* ========== Token Actions ========== */
 
