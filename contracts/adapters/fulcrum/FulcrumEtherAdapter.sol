@@ -23,7 +23,7 @@ contract FulcrumEtherAdapter is IEtherAdapter {
 
 /* ========== Storage ========== */
 
-  string public override name = "Fulcrum Ether Adapter";
+  string public override name = "Fulcrum ETH Adapter";
 
 /* ========== Constructor & Initializer ========== */
 
