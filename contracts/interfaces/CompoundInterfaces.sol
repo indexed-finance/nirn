@@ -20,7 +20,7 @@ interface ICToken {
   function interestRateModel() external view returns (IInterestRateModel);
   function balanceOf(address account) external view returns (uint256);
   function mint(uint256 mintAmount) external returns (uint256);
-  function mint() external payable returns (uint256);
+  function mint() external payable;
   function redeem(uint256 tokenAmount) external returns (uint256);
   function redeemUnderlying(uint256 underlyingAmount) external returns (uint256);
 }
@@ -44,4 +44,5 @@ interface IInterestRateModel {
 
 interface IComptroller {
   function getAllMarkets() external view returns (ICToken[] memory);
+  function mintGuardianPaused(address cToken) external view returns (bool);
 }
