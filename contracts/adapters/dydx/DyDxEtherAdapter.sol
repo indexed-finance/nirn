@@ -23,7 +23,7 @@ contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
 
 /* ========== Storage ========== */
 
-  string public override name = "DyDx Ether Adapter";
+  string public override name = "DyDx ETH Adapter";
   mapping(address => address) public userModules;
 
 /* ========== Constructor & Initializer ========== */
