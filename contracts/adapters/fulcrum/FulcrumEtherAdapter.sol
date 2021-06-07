@@ -41,7 +41,7 @@ contract FulcrumEtherAdapter is IEtherAdapter {
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     return IToken(token).totalSupplyInterestRate(
-      IToken(token).totalAssetSupply().addMin0(liquidityDelta)
+      IToken(token).totalAssetSupply().add(liquidityDelta)
     ) / 100;
   }
 

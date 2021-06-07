@@ -57,7 +57,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     IToken iToken = IToken(token);
     return iToken.totalSupplyInterestRate(
-      iToken.totalAssetSupply().addMin0(liquidityDelta)
+      iToken.totalAssetSupply().add(liquidityDelta)
     ) / 100;
   }
 

@@ -65,7 +65,7 @@ contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
     uint256 rate = dydx.getMarketInterestRate(_marketId).value;
     uint256 aprBorrow = rate * 31622400;
     uint256 borrow = dydx.getMarketTotalPar(_marketId).borrow;
-    uint256 supply = uint256(dydx.getMarketTotalPar(_marketId).supply).addMin0(liquidityDelta);
+    uint256 supply = uint256(dydx.getMarketTotalPar(_marketId).supply).add(liquidityDelta);
     uint256 usage = (borrow.mul(DECIMAL)) / supply;
     apr = ((aprBorrow.mul(usage)) / DECIMAL).mul(dydx.getEarningsRate().value) / DECIMAL;
   }

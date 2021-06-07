@@ -54,7 +54,7 @@ contract CErc20Adapter is AbstractErc20Adapter() {
       uint256 reserveFactorMantissa
     ) = CTokenParams.getInterestRateParameters(address(cToken));
     return IInterestRateModel(model).getSupplyRate(
-      cashPrior.addMin0(liquidityDelta),
+      cashPrior.add(liquidityDelta),
       borrowsPrior,
       reservesPrior,
       reserveFactorMantissa

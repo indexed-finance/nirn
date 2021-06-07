@@ -47,7 +47,7 @@ contract AaveV2EtherAdapter is AbstractEtherAdapter {
     ILendingPool pool = aave.getLendingPool();
     address reserve = underlying;
     ILendingPool.ReserveData memory data = pool.getReserveData(reserve);
-    uint256 availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).addMin0(liquidityDelta);
+    uint256 availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).add(liquidityDelta);
     uint256 totalVariableDebt = data.variableDebtToken.scaledTotalSupply().rayMul(data.variableBorrowIndex);
     (uint256 totalStableDebt, uint256 avgStableRate) = data.stableDebtToken.getTotalSupplyAndAvgRate();
     (uint256 liquidityRate, ,) = data.interestRateStrategy.calculateInterestRates(

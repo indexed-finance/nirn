@@ -37,7 +37,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
     ILendingPoolCore core = aave.getLendingPoolCore();
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(reserve).calculateInterestRates(
       reserve,
-      core.getReserveAvailableLiquidity(reserve).addMin0(liquidityDelta),
+      core.getReserveAvailableLiquidity(reserve).add(liquidityDelta),
       core.getReserveTotalBorrowsStable(reserve),
       core.getReserveTotalBorrowsVariable(reserve),
       core.getReserveCurrentAverageStableBorrowRate(reserve)

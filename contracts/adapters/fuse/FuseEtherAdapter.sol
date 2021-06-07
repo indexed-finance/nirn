@@ -54,7 +54,7 @@ contract FuseEtherAdapter is AbstractEtherAdapter() {
       uint256 reserveFactorMantissa
     ) = CTokenParams.getInterestRateParameters(address(fToken));
     return IInterestRateModel(model).getSupplyRate(
-      cashPrior.addMin0(liquidityDelta),
+      cashPrior.add(liquidityDelta),
       borrowsPrior,
       reservesPrior.add(fToken.totalFuseFees()).add(fToken.totalAdminFees()),
       reserveFactorMantissa.add(fToken.fuseFeeMantissa()).add(fToken.adminFeeMantissa())

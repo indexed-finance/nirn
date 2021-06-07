@@ -20,7 +20,7 @@ library SignedAddition {
     b = uint256(a);
   }
 
-  function addMin0(uint256 a, int256 b) internal pure returns (uint256) {
+  function add(uint256 a, int256 b) internal pure returns (uint256) {
     require(a < 2**255);
     int256 _a = int256(a);
     int256 c = _a + b;

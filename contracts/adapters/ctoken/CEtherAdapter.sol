@@ -55,7 +55,7 @@ contract CEtherAdapter is AbstractEtherAdapter() {
     ) = CTokenParams.getInterestRateParameters(address(cToken));
 
     return IInterestRateModel(model).getSupplyRate(
-      cashPrior.addMin0(liquidityDelta),
+      cashPrior.add(liquidityDelta),
       borrowsPrior,
       reservesPrior,
       reserveFactorMantissa
