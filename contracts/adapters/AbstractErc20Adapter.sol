@@ -63,12 +63,14 @@ abstract contract AbstractErc20Adapter {
 /* ========== Token Actions ========== */
 
   function deposit(uint256 amountUnderlying) external virtual returns (uint256 amountMinted) {
+    require(amountUnderlying > 0, "deposit 0");
     underlying.safeTransferFrom(msg.sender, address(this), amountUnderlying);
     amountMinted = _mint(amountUnderlying);
     token.safeTransfer(msg.sender, amountMinted);
   }
 
   function withdraw(uint256 amountToken) public virtual returns (uint256 amountReceived) {
+    require(amountToken > 0, "withdraw 0");
     token.safeTransferFrom(msg.sender, address(this), amountToken);
     amountReceived = _burn(amountToken);
     underlying.safeTransfer(msg.sender, amountReceived);
