@@ -89,19 +89,16 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 /* ========== Internal Actions ========== */
 
   function _approve() internal virtual override {}
-  // Compound LINK Adapter | deposit(100) GAS 332447 | balanceWrapped() 0.000000998849938881 GAS 32012 | balanceUnderlying() 200.00003684326894141 GAS 48346
-  // Compound WBTC Adapter | deposit(10) GAS 365016 | balanceWrapped() 499.59124833 GAS 32012 | balanceUnderlying() 9.99999999 GAS 48488
-  // Cream AAVE Adapter | deposit(100) GAS 542018 | balanceWrapped() 0.00000096870869565 GAS 31076 | balanceUnderlying() 200.000258393601241108 GAS 43096
-  // Cream COMP Adapter | deposit(100) GAS 310990 | balanceWrapped() 0.000000927905663439 GAS 31076 | balanceUnderlying() 200.000093071756167403 GAS 43096
+
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
     address _token = token;
-    require(ICToken(_token).mint{value: amountUnderlying}() == 0, "CEther: Mint failed");
+    ICToken(_token).mint{value: amountUnderlying}();
     amountMinted = IERC20(_token).balanceOf(address(this));
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
     require(ICToken(token).redeem(amountToken) == 0, "CEther: Burn failed");
-    amountReceived = IERC20(underlying).balanceOf(address(this));
+    amountReceived = address(this).balance;
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
