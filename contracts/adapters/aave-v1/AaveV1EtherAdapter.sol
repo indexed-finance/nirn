@@ -88,12 +88,12 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
     amountReceived = amountToken;
-    aave.getLendingPool().redeemUnderlying(ETH_RESERVE_ADDRESS, address(this), amountToken, 0);
+    IAToken(token).redeem(amountToken);
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
     token.safeTransferFrom(msg.sender, address(this), amountUnderlying);
     amountBurned = amountUnderlying;
-    aave.getLendingPool().redeemUnderlying(ETH_RESERVE_ADDRESS, address(this), amountUnderlying, 0);
+    IAToken(token).redeem(amountUnderlying);
   }
 }

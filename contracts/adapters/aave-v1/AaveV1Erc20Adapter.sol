@@ -70,12 +70,12 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
     amountReceived = amountToken;
-    aave.getLendingPool().redeemUnderlying(underlying, address(this), amountToken, 0);
+    IAToken(token).redeem(amountToken);
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
     token.safeTransferFrom(msg.sender, address(this), amountUnderlying);
     amountBurned = amountUnderlying;
-    aave.getLendingPool().redeemUnderlying(underlying, address(this), amountUnderlying, 0);
+    IAToken(token).redeem(amountUnderlying);
   }
 }
