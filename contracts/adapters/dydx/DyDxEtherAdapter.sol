@@ -4,9 +4,11 @@ pragma abicoder v2;
 
 import "./DyDxErc20Adapter.sol";
 import "../../interfaces/IWETH.sol";
+import "../../libraries/SignedAddition.sol";
 
 
 contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
@@ -31,8 +33,8 @@ contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
     underlying = _underlying;
     token = _underlying;
     marketId = _marketId;
-    dydxUserModuleImplementation = address(new DyDxUserModule(_dydx, _marketId));
-    _underlying.safeApprove(address(_dydx), type(uint256).max);
+    dydxUserModuleImplementation = address(new DyDxUserModule(_dydx, _underlying, _marketId));
+    _underlying.safeApproveMax(address(_dydx));
   }
 
 /* ========== User Modules ========== */
@@ -58,19 +60,19 @@ contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
     apr = ((aprBorrow.mul(usage)) / DECIMAL).mul(dydx.getEarningsRate().value) / DECIMAL;
   }
 
-  function getHypotheticalAPR(uint256 _deposit) external view virtual override returns (uint256 apr) {
+  function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     uint256 _marketId = marketId;
     uint256 rate = dydx.getMarketInterestRate(_marketId).value;
     uint256 aprBorrow = rate * 31622400;
     uint256 borrow = dydx.getMarketTotalPar(_marketId).borrow;
-    uint256 supply = uint256(dydx.getMarketTotalPar(_marketId).supply).add(_deposit);
+    uint256 supply = uint256(dydx.getMarketTotalPar(_marketId).supply).addMin0(liquidityDelta);
     uint256 usage = (borrow.mul(DECIMAL)) / supply;
     apr = ((aprBorrow.mul(usage)) / DECIMAL).mul(dydx.getEarningsRate().value) / DECIMAL;
   }
 
 /* ========== Caller Balance Queries ========== */
 
-  function tokenBalance() public view virtual override returns (uint256) {
+  function balanceWrapped() public view virtual override returns (uint256) {
     address module = userModules[msg.sender];
     if (module == address(0)) {
       return 0;
@@ -79,8 +81,8 @@ contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
     return bal.value;
   }
 
-  function underlyingBalance() external view virtual override returns (uint256) {
-    return tokenBalance();
+  function balanceUnderlying() external view virtual override returns (uint256) {
+    return balanceWrapped();
   }
 
 /* ========== Token Actions ========== */
@@ -108,11 +110,19 @@ contract DyDxEtherAdapter is IEtherAdapter, DyDxStructs {
     _withdraw(amountToken, true);
   }
 
+  function withdrawAll() external virtual override returns (uint256 amountReceived) {
+    return withdraw(balanceWrapped());
+  }
+
   function withdrawAsETH(uint256 amountToken) public virtual override returns (uint256 amountReceived) {
     amountReceived = amountToken;
     _withdraw(amountToken, false);
     IWETH(underlying).withdraw(amountReceived);
     address(msg.sender).safeTransferETH(amountReceived);
+  }
+
+  function withdrawAllAsETH() external virtual override returns (uint256 amountReceived) {
+    return withdrawAsETH(balanceWrapped());
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
