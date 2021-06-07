@@ -62,6 +62,8 @@ interface ILendingPool {
 
   function getReservesList() external view returns (address[] memory);
 
+  function getConfiguration(address asset) external view returns (ReserveConfigurationMap memory);
+
   function deposit(
     address asset,
     uint256 amount,
