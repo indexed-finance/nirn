@@ -21,6 +21,8 @@ contract AaveV1ProtocolAdapter {
   string public protocol = "Aave V1";
 
   uint256 public totalMapped;
+  address[] public frozen;
+  address[] public adapters;
 
   constructor(IAdapterRegistry _registry) {
     registry = _registry;
@@ -43,28 +45,36 @@ contract AaveV1ProtocolAdapter {
     }
   }
 
-  function mapTokens(uint256 max) external {
+  function map(uint256 max) external {
     ILendingPoolCore core = aave.getLendingPoolCore();
-    address[] memory reserves = core.getReserves();
+    address[] memory reserves = getUnmapped();
     uint256 len = reserves.length;
-    uint256 i = totalMapped;
-    uint256 stopAt = i + max;
-    if (len < stopAt) stopAt = len;
-    if (i >= stopAt) return;
-    for (; i < stopAt; i++) {
+    if (max < len) {
+      len = max;
+    }
+    address[] memory _adapters = new address[](len);
+    uint256 skipped;
+    for (uint256 i = 0; i < len; i++) {
       address underlying = reserves[i];
-      if (core.getReserveIsFreezed(underlying)) continue;
+      if (core.getReserveIsFreezed(underlying)) {
+        frozen.push(underlying);
+        skipped++;
+        continue;
+      }
       address adapter;
       if (underlying == ETH_RESERVE_ADDRESS) {
         adapter = CloneLibrary.createClone(etherAdapterImplementation);
-        AaveV1EtherAdapter(adapter).initialize(weth, core.getReserveATokenAddress(underlying));
+        AaveV1EtherAdapter(payable(adapter)).initialize(weth, core.getReserveATokenAddress(underlying));
       } else {
         adapter = CloneLibrary.createClone(erc20AdapterImplementation);
         AaveV1Erc20Adapter(adapter).initialize(underlying, core.getReserveATokenAddress(underlying));
       }
-      registry.addTokenAdapter(adapter);
+      adapters.push(adapter);
+      _adapters[i - skipped] = adapter;
     }
-    totalMapped = i-1;
+    totalMapped += len;
+    assembly { if gt(skipped, 0) { mstore(_adapters, sub(mload(_adapters), skipped)) } }
+    registry.addTokenAdapters(_adapters);
   }
 
 }

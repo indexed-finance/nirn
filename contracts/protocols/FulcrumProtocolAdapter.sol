@@ -34,7 +34,7 @@ contract FulcrumProtocolAdapter {
     loanPools = bzx.getLoanPoolsList(totalMapped, 1e18);
   }
 
-  function mapTokens(uint256 max) external {
+  function map(uint256 max) external {
     uint256 total = totalMapped;
     address[] memory loanPools = bzx.getLoanPoolsList(total, max);
     uint256 len = loanPools.length;

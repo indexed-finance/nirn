@@ -14,6 +14,8 @@ contract CompoundProtocolAdapter {
   string public protocol = "Compound";
   // @todo Add support for cBAT
   uint256 public totalMapped = 1;
+  address[] public adapters;
+  address[] public frozen;
 
   constructor(
     IAdapterRegistry _registry,
@@ -21,6 +23,21 @@ contract CompoundProtocolAdapter {
   ) {
     registry = _registry;
     adapterFactory = _adapterFactory;
+  }
+
+  function unfreeze(uint256 i) external {
+    ICToken cToken = ICToken(frozen[i]);
+    require(!comptroller.mintGuardianPaused(address(cToken)), "Asset frozen");
+    (, address adapter) = adapterFactory.deployAdapter(cToken, "Compound");
+    registry.addTokenAdapter(adapter);
+    adapters.push(adapter);
+    address last = frozen[frozen.length - 1];
+    if (address(cToken) == last) {
+      frozen.pop();
+    } else {
+      frozen[i] = last;
+      frozen.pop();
+    }
   }
 
   function getUnmapped() public view returns (ICToken[] memory cTokens) {
@@ -37,16 +54,25 @@ contract CompoundProtocolAdapter {
     }
   }
 
-  function mapTokens(uint256 max) external {
+  function map(uint256 max) external {
     ICToken[] memory cTokens = getUnmapped();
     uint256 len = cTokens.length;
     if (max < len) {
       len = max;
     }
+    uint256 skipped;
+    address[] memory _adapters = new address[](len);
     for (uint256 i = 0; i < len; i++) {
-      (,address adapter) = adapterFactory.deployAdapter(cTokens[i], "Compound");
-      registry.addTokenAdapter(adapter);
+      ICToken cToken = cTokens[i];
+      if (comptroller.mintGuardianPaused(address(cToken))) {
+        frozen.push(address(cToken));
+        skipped++;
+        continue;
+      }
+      (,_adapters[i - skipped]) = adapterFactory.deployAdapter(cToken, "Compound");
     }
     totalMapped += len;
+    assembly { if gt(skipped, 0) { mstore(_adapters, sub(mload(_adapters), skipped)) } }
+    registry.addTokenAdapters(_adapters);
   }
 }

@@ -26,7 +26,7 @@ contract DyDxProtocolAdapter {
     _registry.addTokenAdapter(address(new DyDxEtherAdapter(dydx, weth, 0)));
   }
 
-  function mapTokens(uint256 max) external {
+  function map(uint256 max) external {
     uint256 len = dydx.getNumMarkets();
     uint256 i = totalMapped;
     uint256 stopAt = i + max;
