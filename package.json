@@ -40,6 +40,7 @@
     "ethers": "^5.0.8",
     "hardhat": "^2.0.3",
     "hardhat-deploy": "^0.7.0-beta.56",
+    "hardhat-gas-reporter": "^1.0.4",
     "hardhat-typechain": "^0.3.3",
     "husky": "^4.3.0",
     "mocha": "^6.2.2",

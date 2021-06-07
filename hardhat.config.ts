@@ -6,7 +6,8 @@ import '@nomiclabs/hardhat-ethers'
 import '@nomiclabs/hardhat-waffle'
 import 'hardhat-deploy'
 import 'solidity-coverage'
-
+import 'hardhat-gas-reporter'
+import { proxyResolver } from './test/shared/proxyResolution'
 import { randomBytes } from 'crypto';
 
 const configureNetwork = (network: string, chainId: number) => ({
@@ -16,6 +17,10 @@ const configureNetwork = (network: string, chainId: number) => ({
 });
 
 export default {
+  gasReporter: {
+    enabled: true,
+    proxyResolver
+  },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
@@ -32,7 +37,7 @@ export default {
       allowUnlimitedContractSize: false,
       forking: {
         url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-        blockNumber: 12486505
+        blockNumber: 12569699
       }
     },
     mainnet: configureNetwork('mainnet', 1),
