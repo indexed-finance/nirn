@@ -21,6 +21,8 @@ interface IAdapterRegistry {
 
   function addTokenAdapter(address adapter) external;
 
+  function addTokenAdapters(address[] calldata adapters) external;
+
   function addProtocolAdapter(address protocolAdapter) external;
 
   function getAdaptersSortedByAPR(address underlying)
