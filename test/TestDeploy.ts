@@ -20,7 +20,7 @@ import {
   IErc20Adapter,
   IERC20
 } from "../typechain"
-import { deployContract, deploy, impersonate, sendEtherTo, getContract, sendTokenTo, WETH } from "./utils"
+import { deployContract, deploy, impersonate, sendEtherTo, getContract, sendTokenTo, WETH } from "./shared/utils"
 
 
 describe('Deploy All', () => {
