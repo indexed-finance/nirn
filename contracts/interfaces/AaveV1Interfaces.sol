@@ -30,8 +30,13 @@ interface ILendingPoolAddressesProvider {
 
 interface ILendingPool {
   function deposit(address reserve, uint256 amount, uint16 referralCode) external payable;
-  function redeemUnderlying(address reserve, address user, uint256 amount, uint256 abalanceWrappedAfterRedeem) external;
 }
+
+
+interface IAToken {
+  function redeem(uint256 amount) external;
+}
+
 
 interface ILendingPoolCore {
   function getReserves() external view returns (address[] memory);
