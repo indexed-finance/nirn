@@ -149,6 +149,53 @@ describe('CEtherAdapter', () => {
     })
   })
 
+  describe('withdrawUnderlying()', () => {
+    before(async () => {
+      await adapter.deposit(amountDeposited);
+      await token.transfer(`0x${'11'.repeat(20)}`, await token.balanceOf(wallet.address))
+    })
+
+    it('Should revert if caller has insufficient balance', async () => {
+      await expect(adapter.connect(wallet1).withdrawUnderlying(getBigNumber(1))).to.be.revertedWith('TH:STF')
+    })
+
+    it('Should burn iToken and redeem underlying', async () => {
+      const balanceUnderlying = await adapter.balanceUnderlying();
+      const tx = adapter.withdrawUnderlying(balanceUnderlying)
+      await tx;
+      const amount = await underlyingToWrapped(balanceUnderlying);
+      await expect(tx)
+        .to.emit(cToken, 'Transfer')
+        .withArgs(wallet.address, adapter.address, amount)
+        .to.emit(token, 'Transfer')
+        .withArgs(adapter.address, wallet.address, balanceUnderlying);
+      expect(await token.balanceOf(wallet.address)).to.eq(balanceUnderlying);
+    })
+  })
+
+  describe('withdrawUnderlyingAsETH()', () => {
+    before(async () => {
+      await adapter.deposit(amountDeposited);
+    })
+
+    it('Should revert if caller has insufficient balance', async () => {
+      await expect(adapter.connect(wallet1).withdrawUnderlyingAsETH(getBigNumber(1))).to.be.revertedWith('TH:STF')
+    })
+
+    it('Should burn iToken and redeem underlying', async () => {
+      const balanceUnderlying = await adapter.balanceUnderlying();
+      const balanceBefore = await ethers.provider.getBalance(wallet.address);
+      const tx = adapter.withdrawUnderlyingAsETH(balanceUnderlying)
+      await tx;
+      const amount = await underlyingToWrapped(balanceUnderlying);
+      await expect(tx)
+        .to.emit(cToken, 'Transfer')
+        .withArgs(wallet.address, adapter.address, amount)
+      const balanceAfter = await ethers.provider.getBalance(wallet.address);
+      expect(balanceAfter.sub(balanceBefore)).to.eq(balanceUnderlying)
+    })
+  })
+
   describe('depositETH()', () => {
     it('Should mint aToken and transfer to caller', async () => {
       const tx = adapter.depositETH({ value: amountDeposited })

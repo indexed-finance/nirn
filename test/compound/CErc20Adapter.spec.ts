@@ -37,10 +37,14 @@ describe('CErc20Adapter', () => {
       return amount.mul(rate).div(getBigNumber(1));
     }
 
-    const underlyingToWrapped = async (amount: BigNumber) => {
+    const underlyingToWrapped = async (amount: BigNumber, roundUp = false) => {
       const c: ICToken = await getContract(cToken.address, 'ICToken');
       const rate = await c.exchangeRateStored();
-      return amount.mul(getBigNumber(1)).div(rate);
+      let q = amount.mul(getBigNumber(1)).div(rate);
+      if (roundUp && !q.mul(rate).eq(amount)) {
+        q = q.add(1);
+      }
+      return q;
     }
 
     async function getTokens(amount: number) {
@@ -150,6 +154,30 @@ describe('CErc20Adapter', () => {
         expect(await cToken.balanceOf(wallet.address)).to.eq(0);
       })
     })
+
+    describe('withdrawUnderlying()', () => {
+      before(async () => {
+        await adapter.deposit(amountDeposited);
+        await token.transfer(`0x${'11'.repeat(20)}`, await token.balanceOf(wallet.address))
+      })
+
+      it('Should revert if caller has insufficient balance', async () => {
+        await expect(adapter.connect(wallet1).withdrawUnderlying(getBigNumber(1))).to.be.revertedWith('TH:STF')
+      })
+  
+      it('Should burn iToken and redeem underlying', async () => {
+        const balanceUnderlying = await adapter.balanceUnderlying();
+        const tx = adapter.withdrawUnderlying(balanceUnderlying)
+        await tx;
+        const amount = await underlyingToWrapped(balanceUnderlying);
+        await expect(tx)
+          .to.emit(cToken, 'Transfer')
+          .withArgs(wallet.address, adapter.address, amount)
+          .to.emit(token, 'Transfer')
+          .withArgs(adapter.address, wallet.address, balanceUnderlying);
+        expect(await token.balanceOf(wallet.address)).to.eq(balanceUnderlying);
+      })
+    })
   });
 
   // Paused
@@ -163,10 +191,10 @@ describe('CErc20Adapter', () => {
 
   testAdapter(getAddress('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'), getAddress('0x39aa39c021dfbae8fac545936693ac917d5e7563'), 'USDC');
   testAdapter(getAddress('0xdac17f958d2ee523a2206206994597c13d831ec7'), getAddress('0xf650c3d88d12db855b8bf7d11be6c55a4e07dcc9'), 'USDT');
-  // testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0x5d3a536e4d6dbd6114cc1ead35777bab948e3643'), 'DAI');
-  // testAdapter(getAddress('0x1f9840a85d5af5bf1d1762f925bdaddc4201f984'), getAddress('0x35a18000230da775cac24873d00ff85bccded550'), 'UNI');
-  // testAdapter(getAddress('0xc00e94cb662c3520282e6f5717214004a7f26888'), getAddress('0x70e36f6bf80a52b3b46b3af8e106cc0ed743e8e4'), 'COMP');
-  // testAdapter(getAddress('0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'), getAddress('0xccf4429db6322d5c611ee964527d42e5d685dd6a'), 'WBTC');
-  // testAdapter(getAddress('0x0000000000085d4780b73119b644ae5ecd22b376'), getAddress('0x12392f67bdf24fae0af363c24ac620a2f67dad86'), 'TUSD');
-  // testAdapter(getAddress('0x514910771af9ca656af840dff83e8264ecf986ca'), getAddress('0xface851a4921ce59e912d19329929ce6da6eb0c7'), 'LINK');
+  testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0x5d3a536e4d6dbd6114cc1ead35777bab948e3643'), 'DAI');
+  testAdapter(getAddress('0x1f9840a85d5af5bf1d1762f925bdaddc4201f984'), getAddress('0x35a18000230da775cac24873d00ff85bccded550'), 'UNI');
+  testAdapter(getAddress('0xc00e94cb662c3520282e6f5717214004a7f26888'), getAddress('0x70e36f6bf80a52b3b46b3af8e106cc0ed743e8e4'), 'COMP');
+  testAdapter(getAddress('0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'), getAddress('0xccf4429db6322d5c611ee964527d42e5d685dd6a'), 'WBTC');
+  testAdapter(getAddress('0x0000000000085d4780b73119b644ae5ecd22b376'), getAddress('0x12392f67bdf24fae0af363c24ac620a2f67dad86'), 'TUSD');
+  testAdapter(getAddress('0x514910771af9ca656af840dff83e8264ecf986ca'), getAddress('0xface851a4921ce59e912d19329929ce6da6eb0c7'), 'LINK');
 });
