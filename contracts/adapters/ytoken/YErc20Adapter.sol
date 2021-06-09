@@ -73,7 +73,7 @@ contract YErc20Adapter is AbstractErc20Adapter() {
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
     IYearnRegistry yToken = IYearnRegistry(token);
 
-    uint256 currentTotalSupply = IERC20(_token).totalSupply();
+    uint256 currentTotalSupply = IERC20(address(yToken)).totalSupply();
 
   return 1;
   
