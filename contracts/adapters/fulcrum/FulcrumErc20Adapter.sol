@@ -21,6 +21,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
 /* ========== Storage ========== */
 
   address public override underlying;
+
   address public override token;
 
 /* ========== Constructor & Initializer ========== */
@@ -96,7 +97,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
     uint256 currentPrice = IToken(token).tokenPrice();
-    amountBurned = amountUnderlying.mul(1e18) / currentPrice;
+    amountBurned = amountUnderlying.mul(1e18).divCeil(currentPrice);
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
   }
