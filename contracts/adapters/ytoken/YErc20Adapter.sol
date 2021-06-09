@@ -2,7 +2,6 @@
 pragma solidity =0.7.6;
 
 import "../AbstractErc20Adapter.sol";
-import "../../interfaces/IYearnRegistry.sol";
 import "../../interfaces/YearnInterfaces.sol";
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IWETH.sol";
