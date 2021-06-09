@@ -100,7 +100,7 @@ contract FuseEtherAdapter is AbstractEtherAdapter() {
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying.mul(1e18) / IFToken(token).exchangeRateCurrent();
+    amountBurned = amountUnderlying.mul(1e18).divCeil(IFToken(token).exchangeRateCurrent());
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(IFToken(token).redeemUnderlying(amountUnderlying) == 0, "CEther: Burn failed");
   }
