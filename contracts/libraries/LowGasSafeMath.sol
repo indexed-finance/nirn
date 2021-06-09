@@ -67,4 +67,12 @@ library LowGasSafeMath {
     z = x * y;
     require(z / x == y, errorMessage);
   }
+
+  /// @notice Returns ceil(x / y)
+  /// @param x The numerator
+  /// @param y The denominator
+  /// @return z The quotient of x and y
+  function divCeil(uint256 x, uint256 y) internal pure returns (uint256 z) {
+    z = x % y == 0 ? x / y : (x/y) + 1;
+  }
 }

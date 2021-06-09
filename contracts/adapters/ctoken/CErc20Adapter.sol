@@ -86,7 +86,7 @@ contract CErc20Adapter is AbstractErc20Adapter() {
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying.mul(1e18) / ICToken(token).exchangeRateCurrent();
+    amountBurned = amountUnderlying.mul(1e18).divCeil(ICToken(token).exchangeRateCurrent());
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CErc20: Burn failed");
   }
