@@ -70,7 +70,7 @@ function getUnmapped() public view returns (IVault[] memory yTokens) {
     for (uint256 i = 0; i < len; i++) {
       IVault yToken = yTokens[i];
     //gilles tbd  if (comptroller.mintGuardianPaused(address(cToken))) {
-      if (1) { // to replace 
+      if (true) { // to replace 
         frozen.push(address(yToken));
         skipped++;
         continue;
