@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
-import "../AbstractErc20Adapter.sol";
+import "../AbstractEtherAdapter.sol";
 import "../../interfaces/YearnInterfaces.sol";
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IWETH.sol";
@@ -9,7 +9,7 @@ import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/SignedAddition.sol";
 
-contract YErc20Adapter is AbstractErc20Adapter() {
+contract YEtherAdapter is AbstractEtherAdapter() {
   using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
@@ -20,10 +20,10 @@ contract YErc20Adapter is AbstractErc20Adapter() {
   uint internal __previousPPFSTimestamp;
   uint256 internal __previousPPFS;
 
- 
+
 /* ========== Initializer ========== */
 
-function initialize(
+  function initialize(
     address _underlying,
     address _token,
     string memory protocolName
@@ -31,6 +31,7 @@ function initialize(
     super.initialize(_underlying, _token);
     __protocolName = protocolName;
   }
+
 
 /* ========== Internal Queries ========== */
 
@@ -41,19 +42,20 @@ function initialize(
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256) {
-
-    uint256 currentPPFS = IVault(token).getPricePerFullShare();
+ uint256 currentPPFS = IVault(token).getPricePerFullShare();
     uint currentPPFSTimeStamp = block.timestamp;
 
     if (currentPPFSTimeStamp - __previousPPFSTimestamp > 0) {
       return (currentPPFS - __previousPPFS)/(currentPPFSTimeStamp - __previousPPFSTimestamp);
-    }
+    } 
     else {
       return 0;
-    }
+    } 
+    
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
+    
     uint256 currentTotalSupply = IERC20(token).totalSupply();
     require (int256(currentTotalSupply) + liquidityDelta != 0);
     return  uint256(int(this.getAPR()) * (int(currentTotalSupply) / (int(currentTotalSupply) + liquidityDelta)));
@@ -64,17 +66,32 @@ function initialize(
 
   function balanceUnderlying() external view virtual override returns (uint256) {
     address _token = token;
-    return IERC20(_token).balanceOf(msg.sender).mul(IVault(_token).getPricePerFullShare()) / 1e18;
+    return IERC20(_token).balanceOf(msg.sender).mul(IVault(_token).getPricePerFullShare()) / 1e18;  }
+
+/* ========== Internal Ether Handlers ========== */
+  
+  // Convert to WETH if contract takes WETH
+  function _afterReceiveETH(uint256 amount) internal virtual override {}
+
+  // Convert to WETH if contract takes ETH
+  function _afterReceiveWETH(uint256 amount) internal virtual override {
+    IWETH(underlying).withdraw(amount);
+  }
+
+  // Convert to ETH if contract returns WETH
+  function _beforeSendETH(uint256 amount) internal virtual override {}
+
+  // Convert to WETH if contract returns ETH
+  function _beforeSendWETH(uint256 amount) internal virtual override {
+    IWETH(underlying).deposit{value: amount}();
   }
 
 /* ========== Internal Actions ========== */
 
-  function _approve() internal virtual override {
-    underlying.safeApproveMax(token);
-  }
+  function _approve() internal virtual override {}
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
-    address _token = token;
+     address _token = token;
     IVault(_token).deposit(amountUnderlying);
     amountMinted = IERC20(_token).balanceOf(address(this));
 
@@ -90,7 +107,7 @@ function initialize(
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying.mul(1e18) / IVault(token).getPricePerFullShare();
+     amountBurned = amountUnderlying.mul(1e18) / IVault(token).getPricePerFullShare();
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     IVault(token).withdraw(amountUnderlying);
   }
