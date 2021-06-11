@@ -176,7 +176,14 @@ contract TestMapper {
   }
 
   function yearn() external view {
-    address[] memory vaultsAddresses = YEARN.getVaults();
+
+    IVault[] memory IVaultsAddresses = YEARN.getVaults();
+    address[] memory vaultsAddresses;
+    for (uint256 i = 0 ; i < IVaultsAddresses.length;i++) {
+       vaultsAddresses[i] = address(IVaultsAddresses[i]);
+    }
+
+
     uint256 len = vaultsAddresses.length;
     for (uint256 i = 0; i < len; i++) {
       address vault = vaultsAddresses[i];

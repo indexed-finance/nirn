@@ -58,7 +58,7 @@ interface IYearnRegistry {
 
   function getVaultsLength() external view returns (uint256);
 
-  function getVaults() external view returns (address[] memory);
+  function getVaults() external view returns (IVault[] memory);
 
   function getVaultInfo(address _vault)
     external

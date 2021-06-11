@@ -53,10 +53,14 @@ function initialize(
     }
   }
 
+
+//safe math library safecast
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
     uint256 currentTotalSupply = IERC20(token).totalSupply();
     require (int256(currentTotalSupply) + liquidityDelta != 0);
-    return  uint256(int(this.getAPR()) * (int(currentTotalSupply) / (int(currentTotalSupply) + liquidityDelta)));
+    uint256 APRForTotalSupply = (this.getAPR()).mul(currentTotalSupply);
+    uint256 totalSupplyAndLiquidityDelta = uint256(currentTotalSupply.add(liquidityDelta));
+    return  APRForTotalSupply/totalSupplyAndLiquidityDelta;
   
   }
 
