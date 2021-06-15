@@ -99,3 +99,4 @@ function initialize(
     IVault(token).withdraw(amountUnderlying);
   }
 }
+
