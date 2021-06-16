@@ -5,7 +5,7 @@ import "../libraries/TransferHelper.sol";
 import "../libraries/SymbolHelper.sol";
 import "../interfaces/IERC20Metadata.sol";
 import "../interfaces/IERC20.sol";
-
+import "hardhat/console.sol";
 
 abstract contract AbstractErc20Adapter {
   using SymbolHelper for address;
@@ -81,6 +81,7 @@ abstract contract AbstractErc20Adapter {
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual returns (uint256 amountBurned) {
+    console.log('amountUnderlying in absctract',amountUnderlying);
     amountBurned = _burnUnderlying(amountUnderlying);
     underlying.safeTransfer(msg.sender, amountUnderlying);
   }

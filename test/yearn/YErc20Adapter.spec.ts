@@ -102,9 +102,19 @@ describe('YErc20Adapter', () => {
       it('Should return caller balance in yToken (yToken convertible 1:1)', async () => {
         const y: IVault = await getContract(yToken.address, 'IVault');
         // accrue interest
-        await y.getPricePerFullShare();
-       // await y.exchangeRateCurrent();
-        expect(await adapter.balanceUnderlying()).to.be.gte(amountDeposited);
+
+        const rate = await y.getPricePerFullShare();
+        const underlying = await adapter.balanceUnderlying();
+        const balance = await adapter.balanceWrapped();
+        const currentTotalSupply = await y.totalSupply();
+        const yBalance = await y.balance();
+        let pricePerFullShare =  balance.mul(yBalance).div(currentTotalSupply);
+
+        let q = amountMinted.mul(pricePerFullShare).div(getBigNumber(1));
+        console.log('balanceUnderlying',underlying.toString(), 'totalSupply', currentTotalSupply,' balance', balance, 'rate', rate.toString(), 'amountDeposited', amountDeposited.toString(), 'amountMinted', amountMinted.toString(), 'q', q.toString());
+        console.log( 'amountDeposited', amountDeposited.toString());
+  
+        expect(underlying).to.be.gte(q);
         expect(await adapter.connect(wallet1).balanceUnderlying()).to.eq(0);
       })
     })
@@ -131,6 +141,8 @@ describe('YErc20Adapter', () => {
       })
   
       it('Should burn yToken and redeem underlying', async () => {
+        console.log( 'amountDeposited', amountDeposited.toString());
+
         const balance = await yToken.balanceOf(wallet.address);
         const tx = adapter.withdraw(balance)
         await tx;
@@ -145,50 +157,70 @@ describe('YErc20Adapter', () => {
     })
   
     describe('withdrawAll()', () => {
-      before(async () => {
+
+//        console.log('here 0' , amountDeposited)
+        before(async () => {
+        amountDeposited = await getTokens(10)
         await adapter.deposit(amountDeposited);
       })
   
       it('Should burn all caller Token and redeem underlying', async () => {
+
         const yBalance = await yToken.balanceOf(wallet.address);
         const balanceBefore = await token.balanceOf(wallet.address);
+ 
+        // console.log('balanceBefore', balanceBefore.toString());
+
         await adapter.withdrawAll();
+
         const amount = await wrappedToUnderlying(yBalance)
         const balanceAfter = await token.balanceOf(wallet.address);
-        console.log('balanceBefore', balanceBefore.toString(), 'balanceAfter', balanceAfter.toString());
         expect(balanceAfter.sub(balanceBefore)).to.eq(amount);
         expect(await yToken.balanceOf(wallet.address)).to.eq(0);
       })
     })
-
+    
     describe('withdrawUnderlying()', () => {
       before(async () => {
+        amountDeposited = await getTokens(10)
         await adapter.deposit(amountDeposited);
         await token.transfer(`0x${'11'.repeat(20)}`, await token.balanceOf(wallet.address))
       })
-
       it('Should revert if caller has insufficient balance', async () => {
         await expect(adapter.connect(wallet1).withdrawUnderlying(getBigNumber(1))).to.be.revertedWith('TH:STF')
       })
   
       it('Should burn iToken and redeem underlying', async () => {
+ 
+        const y: IVault = await getContract(yToken.address, 'IVault');
+
         const balanceUnderlying = await adapter.balanceUnderlying();
-        const tx = adapter.withdrawUnderlying(balanceUnderlying)
+        const balance = await adapter.balanceWrapped();
+        const currentTotalSupply = await y.totalSupply();
+        const yBalance = await y.balance();
+        let pricePerFullShare =  balance.mul(yBalance).div(currentTotalSupply);
+
+        let q = amountMinted.mul(pricePerFullShare).div(getBigNumber(1));
+
+
+        console.log('balanceUnderlying', balanceUnderlying.toString(), q.toString())
+        const tx = adapter.withdrawUnderlying(q)
         await tx;
-        const amount = await underlyingToWrapped(balanceUnderlying);
+        const amount = await underlyingToWrapped(q);
+        console.log('amount', amount.toString());
         await expect(tx)
           .to.emit(yToken, 'Transfer')
           .withArgs(wallet.address, adapter.address, amount)
           .to.emit(token, 'Transfer')
-          .withArgs(adapter.address, wallet.address, balanceUnderlying);
-        expect(await token.balanceOf(wallet.address)).to.eq(balanceUnderlying);
+          .withArgs(adapter.address, wallet.address, q);
+      //  expect(await token.balanceOf(wallet.address)).to.eq(balanceUnderlying);
       })
     })
   });
 
   
- // testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0xacd43e627e64355f1861cec6d3a6688b31a6f952'), 'DAI');
- testAdapter(getAddress('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'), getAddress('0x597ad1e0c13bfe8025993d9e79c69e1c0233522e'), 'USDC');
+ testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0xacd43e627e64355f1861cec6d3a6688b31a6f952'), 'DAI');
+ //testAdapter(getAddress('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'), getAddress('0x597ad1e0c13bfe8025993d9e79c69e1c0233522e'), 'USDC');
  
 
   
