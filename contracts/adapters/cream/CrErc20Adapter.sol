@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
-import "../AbstractEtherAdapter.sol";
+import "../AbstractErc20Adapter.sol";
 import "../../interfaces/CompoundInterfaces.sol";
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IWETH.sol";
@@ -11,31 +11,31 @@ import "../../libraries/SignedAddition.sol";
 import { CTokenParams } from "../../libraries/CTokenParams.sol";
 
 
-contract CEtherAdapter is AbstractEtherAdapter() {
+contract CrErc20Adapter is AbstractErc20Adapter() {
   using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
-/* ========== Storage ========== */
-
-  string internal __protocolName;
-
-/* ========== Initializer ========== */
-
-  function initialize(
-    address _underlying,
-    address _token,
-    string memory protocolName
-  ) public {
-    super.initialize(_underlying, _token);
-    __protocolName = protocolName;
-  }
-
-
 /* ========== Internal Queries ========== */
 
   function _protocolName() internal view virtual override returns (string memory) {
-    return __protocolName;
+    return "Cream";
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return (
+      tokenAmount
+      .mul(CTokenParams.currentExchangeRate(token))
+      / uint256(1e18)
+    );
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
+    return underlyingAmount
+      .mul(1e18)
+      / CTokenParams.currentExchangeRate(token);
   }
 
 /* ========== Performance Queries ========== */
@@ -53,7 +53,6 @@ contract CEtherAdapter is AbstractEtherAdapter() {
       uint256 reservesPrior,
       uint256 reserveFactorMantissa
     ) = CTokenParams.getInterestRateParameters(address(cToken));
-
     return IInterestRateModel(model).getSupplyRate(
       cashPrior.add(liquidityDelta),
       borrowsPrior,
@@ -65,45 +64,29 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 /* ========== Caller Balance Queries ========== */
 
   function balanceUnderlying() external view virtual override returns (uint256) {
-    return ICToken(token).balanceOf(msg.sender).mul(ICToken(token).exchangeRateStored()) / 1e18;
-  }
-
-/* ========== Internal Ether Handlers ========== */
-  
-  // Convert to WETH if contract takes WETH
-  function _afterReceiveETH(uint256 amount) internal virtual override {}
-
-  // Convert to WETH if contract takes ETH
-  function _afterReceiveWETH(uint256 amount) internal virtual override {
-    IWETH(underlying).withdraw(amount);
-  }
-
-  // Convert to ETH if contract returns WETH
-  function _beforeSendETH(uint256 amount) internal virtual override {}
-
-  // Convert to WETH if contract returns ETH
-  function _beforeSendWETH(uint256 amount) internal virtual override {
-    IWETH(underlying).deposit{value: amount}();
+    return toUnderlyingAmount(ICToken(token).balanceOf(msg.sender));
   }
 
 /* ========== Internal Actions ========== */
 
-  function _approve() internal virtual override {}
+  function _approve() internal virtual override {
+    underlying.safeApproveMax(token);
+  }
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
     address _token = token;
-    ICToken(_token).mint{value: amountUnderlying}();
+    require(ICToken(_token).mint(amountUnderlying) == 0, "CrErc20: Mint failed");
     amountMinted = IERC20(_token).balanceOf(address(this));
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
-    require(ICToken(token).redeem(amountToken) == 0, "CEther: Burn failed");
-    amountReceived = address(this).balance;
+    require(ICToken(token).redeem(amountToken) == 0, "CrErc20: Burn failed");
+    amountReceived = IERC20(underlying).balanceOf(address(this));
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying.mul(1e18).divCeil(ICToken(token).exchangeRateCurrent());
+    amountBurned = toWrappedAmount(amountUnderlying);
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
-    require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CEther: Burn failed");
+    require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CrErc20: Burn failed");
   }
 }
