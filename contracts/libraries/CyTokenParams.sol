@@ -6,7 +6,7 @@ import "./LowGasSafeMath.sol";
 import "hardhat/console.sol";
 
 
-library CTokenParams {
+library CyTokenParams {
   using LowGasSafeMath for uint256;
 
   function getInterestRateParameters(address token) internal view returns (
@@ -21,13 +21,14 @@ library CTokenParams {
 
     cashPrior = cToken.getCash();
     borrowsPrior = cToken.totalBorrows();
+    uint256 borrowsPriorForInterestCalculation = borrowsPrior.sub(cToken.borrowBalanceStored(0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2));
     reservesPrior = cToken.totalReserves();
     uint256 accrualBlockNumber = cToken.accrualBlockNumber();
     uint256 blockDelta = block.number - accrualBlockNumber;
     reserveFactorMantissa = cToken.reserveFactorMantissa();
     if (blockDelta > 0) {
-      uint256 borrowRateMantissa = getBorrowRate(address(model), cashPrior, borrowsPrior, reservesPrior);
-      uint256 interestAccumulated = mulScalarTruncate(borrowRateMantissa.mul(blockDelta), borrowsPrior);
+      uint256 borrowRateMantissa = getBorrowRate(address(model), cashPrior, borrowsPriorForInterestCalculation, reservesPrior);
+      uint256 interestAccumulated = mulScalarTruncate(borrowRateMantissa.mul(blockDelta), borrowsPriorForInterestCalculation);
       borrowsPrior = borrowsPrior.add(interestAccumulated);
       reservesPrior = mulScalarTruncate(reserveFactorMantissa, interestAccumulated).add(reservesPrior);
     }
@@ -41,14 +42,14 @@ library CTokenParams {
     }
 
     IInterestRateModel model = cToken.interestRateModel();
-
     uint256 cashPrior = cToken.getCash();
     uint256 borrowsPrior = cToken.totalBorrows();
+    uint256 borrowsPriorForInterestCalculation = borrowsPrior.sub(cToken.borrowBalanceStored(0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2));
     uint256 reservesPrior = cToken.totalReserves();
     uint256 reserveFactorMantissa = cToken.reserveFactorMantissa();
     if (blockDelta > 0) {
-      uint256 borrowRateMantissa = getBorrowRate(address(model), cashPrior, borrowsPrior, reservesPrior);
-      uint256 interestAccumulated = mulScalarTruncate(borrowRateMantissa.mul(blockDelta), borrowsPrior);
+      uint256 borrowRateMantissa = getBorrowRate(address(model), cashPrior, borrowsPriorForInterestCalculation, reservesPrior);
+      uint256 interestAccumulated = mulScalarTruncate(borrowRateMantissa.mul(blockDelta), borrowsPriorForInterestCalculation);
       borrowsPrior = borrowsPrior.add(interestAccumulated);
       reservesPrior = mulScalarTruncate(reserveFactorMantissa, interestAccumulated).add(reservesPrior);
     }
