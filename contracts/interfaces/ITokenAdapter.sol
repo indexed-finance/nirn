@@ -9,6 +9,10 @@ interface IErc20Adapter {
 
   function name() external view returns (string memory);
 
+  function toUnderlyingAmount(uint256 tokenAmount) external view returns (uint256);
+
+  function toWrappedAmount(uint256 underlyingAmount) external view returns (uint256);
+
   function getAPR() external view returns (uint256);
 
   function getHypotheticalAPR(int256 liquidityDelta) external view returns (uint256);
