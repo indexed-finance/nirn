@@ -5,6 +5,8 @@ pragma abicoder v2;
 
 interface ILendingPoolAddressesProvider {
   function getLendingPool() external view returns (ILendingPool);
+
+  function getPriceOracle() external view returns (IPriceOracle);
 }
 
 
@@ -76,4 +78,52 @@ interface ILendingPool {
     uint256 amount,
     address to
   ) external;
+}
+
+
+interface IAaveDistributionManager {
+  function getAssetData(address asset) external view returns (uint256 index, uint256 emissionPerSecond, uint256 lastUpdateTimestamp);
+
+  function getUserUnclaimedRewards(address account) external view returns (uint256);
+
+  function getRewardsBalance(address[] calldata assets, address user)
+    external
+    view
+    returns (uint256);
+
+  function claimRewards(
+    address[] calldata assets,
+    uint256 amount,
+    address to
+  ) external returns (uint256);
+}
+
+
+interface IPriceOracle {
+  function getAssetPrice(address asset) external view returns (uint256);
+}
+
+interface IStakedAave {
+  function COOLDOWN_SECONDS() external view returns (uint256);
+
+  function stake(address to, uint256 amount) external;
+
+  function redeem(address to, uint256 amount) external;
+
+  function cooldown() external;
+
+  function claimRewards(address to, uint256 amount) external;
+
+  function stakerRewardsToClaim(address account) external view returns (uint256);
+
+  function stakersCooldowns(address account) external view returns (uint256);
+
+  function getTotalRewardsBalance(address staker) external view returns (uint256);
+
+  function getNextCooldownTimestamp(
+    uint256 fromCooldownTimestamp,
+    uint256 amountToReceive,
+    address toAddress,
+    uint256 toBalance
+  ) external returns (uint256);
 }
