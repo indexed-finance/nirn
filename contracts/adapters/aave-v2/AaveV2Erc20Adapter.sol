@@ -34,6 +34,8 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
   address public override underlying;
   address public override token;
   mapping(address => address) public userModules;
+  // Pre-calculated and stored in the initializer to reduce gas costs in `getRewardsAPR`.
+  uint256 internal _oneUnderlyingToken;
 
 /* ========== Constructor & Initializer ========== */
 
@@ -54,6 +56,7 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
       _underlying,
       _token
     ));
+    _oneUnderlyingToken = 10 ** IERC20Metadata(_underlying).decimals();
   }
 
 /* ========== Metadata ========== */
@@ -99,7 +102,9 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
     if (aavePrice == 0 || underlyingPrice == 0) {
       return 0;
     }
-    return aavePrice.mul(emissionsPerSecond.mul(365 days)).mul(1e18) / underlyingPrice.mul(_totalLiquidity);
+    uint256 underlyingValue = underlyingPrice.mul(_totalLiquidity) / _oneUnderlyingToken;
+    uint256 rewardsValue = aavePrice.mul(emissionsPerSecond.mul(365 days));
+    return rewardsValue / underlyingValue;
   }
 
   function getRewardsAPR() public view returns (uint256) {
