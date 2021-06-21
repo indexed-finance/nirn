@@ -9,8 +9,7 @@ import "../interfaces/IAdapterRegistry.sol";
 import "../libraries/CloneLibrary.sol";
 import "../libraries/ReserveConfigurationLib.sol";
 
-// @todo
-// Add freezing & unfreezing functions
+// @todo Add freezing & unfreezing of adapters and unfreezing of tokens
 contract AaveV2ProtocolAdapter {
   using ReserveConfigurationLib for ILendingPool.ReserveConfigurationMap;
 
