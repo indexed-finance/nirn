@@ -49,6 +49,16 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     ));
   }
 
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return tokenAmount.mul(IToken(token).tokenPrice()) / uint256(1e18);
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
+    return underlyingAmount.mul(1e18) / IToken(token).tokenPrice();
+  }
+
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256 apr) {
@@ -96,8 +106,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
-    uint256 currentPrice = IToken(token).tokenPrice();
-    amountBurned = amountUnderlying.mul(1e18).divCeil(currentPrice);
+    amountBurned = amountUnderlying.mul(1e18).divCeil(IToken(token).tokenPrice());
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
   }
