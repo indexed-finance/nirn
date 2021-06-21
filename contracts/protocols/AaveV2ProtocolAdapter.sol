@@ -9,7 +9,8 @@ import "../interfaces/IAdapterRegistry.sol";
 import "../libraries/CloneLibrary.sol";
 import "../libraries/ReserveConfigurationLib.sol";
 
-
+// @todo
+// Add freezing & unfreezing functions
 contract AaveV2ProtocolAdapter {
   using ReserveConfigurationLib for ILendingPool.ReserveConfigurationMap;
 
@@ -17,7 +18,6 @@ contract AaveV2ProtocolAdapter {
   address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
   IAdapterRegistry public immutable registry;
   address public immutable erc20AdapterImplementation;
-  address public immutable etherAdapterImplementation;
 
   string public protocol = "Aave V2";
 
@@ -28,7 +28,6 @@ contract AaveV2ProtocolAdapter {
   constructor(IAdapterRegistry _registry) {
     registry = _registry;
     erc20AdapterImplementation = address(new AaveV2Erc20Adapter(aave));
-    etherAdapterImplementation = address(new AaveV2EtherAdapter(aave));
   }
 
   function getUnmapped() public view returns (address[] memory tokens) {
@@ -65,8 +64,7 @@ contract AaveV2ProtocolAdapter {
         continue;
       }
       if (underlying == weth) {
-        adapter = CloneLibrary.createClone(etherAdapterImplementation);
-        AaveV2EtherAdapter(payable(adapter)).initialize(underlying, aToken);
+        adapter = address(new AaveV2EtherAdapter(aave, underlying, aToken));
       } else {
         adapter = CloneLibrary.createClone(erc20AdapterImplementation);
         AaveV2Erc20Adapter(adapter).initialize(underlying, aToken);
