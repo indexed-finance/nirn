@@ -10,7 +10,6 @@ import {
   AaveV2ProtocolAdapter,
   CompoundProtocolAdapter,
   CreamProtocolAdapter,
-  CTokenAdapterFactory,
   FuseTokenAdapterFactory,
   DyDxProtocolAdapter,
   FulcrumProtocolAdapter,
@@ -18,9 +17,11 @@ import {
   IFusePoolDirectory,
   FusePoolAdapter,
   IErc20Adapter,
-  IERC20
+  IERC20,
+  IronBankProtocolAdapter,
+  IIndexPool
 } from "../typechain"
-import { deployContract, deploy, impersonate, sendEtherTo, getContract, sendTokenTo, WETH } from "./shared/utils"
+import { deployContract, deploy, getTokenSymbol, sendEtherTo, getContract, sendTokenTo, WETH, getIERC20 } from "./shared/utils"
 
 
 describe('Deploy All', () => {
@@ -30,11 +31,11 @@ describe('Deploy All', () => {
   let aaveV2: AaveV2ProtocolAdapter
   let compound: CompoundProtocolAdapter
   let cream: CreamProtocolAdapter
-  let cTokenFactory: CTokenAdapterFactory
   let fTokenFactory: FuseTokenAdapterFactory
   let dydx: DyDxProtocolAdapter
   let fulcrum: FulcrumProtocolAdapter
   let fuse: FuseProtocolAdapter
+  let iron: IronBankProtocolAdapter
 
   let gasTotal: number
 
@@ -43,10 +44,10 @@ describe('Deploy All', () => {
     registry = await deployContract('AdapterRegistry')
     aaveV1 = await deployContract('AaveV1ProtocolAdapter', registry.address)
     aaveV2 = await deployContract('AaveV2ProtocolAdapter', registry.address)
-    cTokenFactory = await deployContract('CTokenAdapterFactory')
     fTokenFactory = await deployContract('FuseTokenAdapterFactory')
-    compound = await deployContract('CompoundProtocolAdapter', registry.address, cTokenFactory.address)
-    cream = await deployContract('CreamProtocolAdapter', registry.address, cTokenFactory.address)
+    compound = await deployContract('CompoundProtocolAdapter', registry.address/* , cTokenFactory.address */)
+    cream = await deployContract('CreamProtocolAdapter', registry.address/* , cTokenFactory.address */)
+    iron = await deployContract('IronBankProtocolAdapter', registry.address/* , cTokenFactory.address */)
     fuse = await deployContract('FuseProtocolAdapter', registry.address, fTokenFactory.address)
     await fuse.deployTransaction.wait()
     const nonce = await wallet.getTransactionCount()
@@ -61,12 +62,12 @@ describe('Deploy All', () => {
       registry,
       aaveV1,
       aaveV2,
-      cTokenFactory,
       compound,
       cream,
       fuse,
       dydx,
       fulcrum,
+      iron
     ].map(c => c.deployTransaction.hash);
 
     const addTxs = [
@@ -77,6 +78,7 @@ describe('Deploy All', () => {
       await registry.addProtocolAdapter(compound.address),
       await registry.addProtocolAdapter(cream.address),
       await registry.addProtocolAdapter(fuse.address),
+      await registry.addProtocolAdapter(iron.address)
     ].map(tx => tx.hash);
 
     gasTotal = (await Promise.all(
@@ -98,8 +100,13 @@ describe('Deploy All', () => {
 
   it('Aave V2', async () => {
     const numTokens = (await aaveV2.getUnmapped()).length;
-    const tx = await aaveV2.map(numTokens)
-    const gasUsed = (await tx.wait()).gasUsed.toNumber()
+    let remainder = numTokens;
+    let gasUsed = 0;
+    while (remainder > 0) {
+      const tx = await aaveV2.map(5)
+      gasUsed += (await tx.wait()).gasUsed.toNumber()
+      remainder -= 5;
+    }
     gasTotal += gasUsed
     console.log(`AAVE V2: Mapped ${numTokens} | Avg Cost:`, Math.floor(gasUsed / numTokens))
   })
@@ -114,16 +121,27 @@ describe('Deploy All', () => {
 
   it('Cream', async () => {
     const numTokens = (await cream.getUnmapped()).length;
-    const n0 = Math.floor(numTokens / 3);
-    const tx0 = await cream.map(n0)
-    const tx1 = await cream.map(n0)
-    const tx2 = await cream.map(numTokens - n0*2)
-    const cost0 = (await tx0.wait()).gasUsed.toNumber()
-    const cost1 = (await tx1.wait()).gasUsed.toNumber()
-    const cost2 = (await tx2.wait()).gasUsed.toNumber()
-    const gasUsed = cost0 + cost1 + cost2
+    let remainder = numTokens;
+    let gasUsed = 0;
+    while (remainder > 0) {
+      const tx = await cream.map(5)
+      gasUsed += (await tx.wait()).gasUsed.toNumber()
+      remainder -= 5;
+    }
     gasTotal += gasUsed
     console.log(`CREAM: Mapped ${numTokens} | Avg Cost:`, Math.floor(gasUsed / numTokens))
+  })
+
+  it('Iron Bank', async () => {
+    const numTokens = (await iron.getUnmapped()).length;
+    let remainder = numTokens;
+    let gasUsed = 0;
+    while (remainder > 0) {
+      const tx = await iron.map(5)
+      gasUsed += (await tx.wait()).gasUsed.toNumber()
+      remainder -= 5;
+    }
+    console.log(`IronBank: Mapped ${numTokens} | Avg Cost:`, Math.floor(gasUsed / numTokens))
   })
 
   it('DyDx', async () => {
@@ -144,7 +162,7 @@ describe('Deploy All', () => {
   let fuseStartId: number;
 
   it('Fuse: Map Pools', async () => {
-    fuseStartId = await registry.getProtocolsCount().then(c => c.toNumber())
+    fuseStartId = await registry.protocolsCount().then((c: BigNumber) => c.toNumber())
     const numPools = (await fuse.getUnmapped()).length;
     const tx = await fuse.map(numPools)
     const gasUsed = (await tx.wait()).gasUsed.toNumber()
@@ -231,80 +249,147 @@ describe('Deploy All', () => {
     await erc20.approve(adapterAddress, amount);
     const gasDeposit = await adapter.estimateGas.deposit(amount);
     await adapter.deposit(amount);
-    const gasTokenBalance = await adapter.estimateGas.tokenBalance();
-    const tokenBalance = await adapter.tokenBalance();
-    const gasUnderlyingBalance = await adapter.estimateGas.underlyingBalance();
-    const underlyingBalance = await adapter.underlyingBalance();
+    const gasTokenBalance = await adapter.estimateGas.balanceWrapped();
+    const tokenBalance = await adapter.balanceWrapped();
+    const gasUnderlyingBalance = await adapter.estimateGas.balanceUnderlying();
+    const underlyingBalance = await adapter.balanceUnderlying();
     console.log(`${name} | deposit(${dAmount}) GAS ${gasDeposit} | tokenBalance() ${
       formatFixed(tokenBalance, decimals)} GAS ${gasTokenBalance} | underlyingBalance() ${
         formatFixed(underlyingBalance, decimals)} GAS ${gasUnderlyingBalance}`
     );
   }
 
-  it('Accuracy', async () => {
-    const tokens = await registry.getSupportedTokens();
-    const counts = await Promise.all(tokens.map(t => registry.getAdaptersCount(t)));
-    const mostSupportedTokens = tokens.filter((t, i) => counts[i].gt(2));
-    console.log(`-- TESTING HYPOTHETICAL APRS FOR DEPOSIT OF 100 TOKENS --`)
-    for (const token of mostSupportedTokens) {
-      const { adapter: adapterAddress } = await registry.getAdapterWithHighestAPR(token);
-      await testAdapterHypotheticalAPR(token, adapterAddress, true)
+  const toAdapter = (address: string): Promise<IErc20Adapter> => getContract(address, 'IErc20Adapter');
+
+  const adapterName = (address: string): Promise<string> => toAdapter(address).then(a => a.name())
+
+  const getIndexPoolTokens = async (address: string) => {
+    const pool: IIndexPool = await getContract(address, 'IIndexPool');
+    const tokens = await pool.getCurrentTokens();
+    const totalDenorm = formatEther(await pool.getTotalDenormalizedWeight())
+    const toData = async (token: string) => {
+      const erc = await getIERC20(token);
+      const balance = await erc.balanceOf(address);
+      const denorm = formatEther(await pool.getDenormalizedWeight(token));
+      const weight = parseFloat(denorm) / parseFloat(totalDenorm)
+      return { balance, token, weight };
     }
-    for (const token of mostSupportedTokens) {
-      const adapters = await registry.getAdaptersList(token);
-      const names = await Promise.all(adapters.map(async (a) => (await getContract(a, 'IErc20Adapter')).name()));
-      const adapterAddress = adapters.find((a, i) => names[i].includes('DyDx'));
-      if (adapterAddress) {
-        await testAdapterHypotheticalAPR(token, adapterAddress)
+    return Promise.all(tokens.map(toData))
+  }
+
+  async function checkIndexAPR(index: string) {
+    let netAPR = 0;
+    const check = async ({ token, balance, weight }: {
+      token: string;
+      balance: BigNumber;
+      weight: number;
+    }) => {
+      const supported = await registry.isSupported(token);
+      let apr = 0;
+      let symbol = '';
+      if (supported) {
+        const bestapr = await registry["getAdapterWithHighestAPRForDeposit(address,uint256,address)"](
+          token,
+          balance,
+          constants.AddressZero
+        );
+        apr = (parseFloat(formatEther(bestapr.apr)) * 100)
+        symbol = await adapterName(bestapr.adapter)
+        netAPR += (apr * weight);
       }
+      console.log(`${symbol} ${supported ? '' : 'NOT '}SUPPORTED${supported ? ` | ${apr.toFixed(2)}% APR` : ''}`)
     }
+    const tokens = await getIndexPoolTokens(index);
+    for (const token of tokens) await check(token);
+    console.log(`${await getTokenSymbol(await getIERC20(index))} Net APR: ${netAPR.toFixed(2)}%`)
+  }
+
+  it('DEFI5', async () => {
+    const index = '0xfa6de2697d59e88ed7fc4dfe5a33dac43565ea41'
+    await checkIndexAPR(index);
   })
 
-  it('COST', async () => {
-    const tokens = await registry.getSupportedTokens();
-    const counts = await Promise.all(tokens.map(t => registry.getAdaptersCount(t)));
-    const mostSupportedTokens = tokens.filter((t, i) => counts[i].gt(2));
-    console.log(`-- TESTING HYPOTHETICAL APRS FOR DEPOSIT OF 100 TOKENS --`)
-    for (const token of mostSupportedTokens) {
-      const { adapter: adapterAddress } = await registry.getAdapterWithHighestAPR(token);
-      await testAdapterDeposit(token, adapterAddress)
-    }
+  it('CC10', async () => {
+    const index = '0xabafa52d3d5a2c18a4c1ae24480d22b831fc0413'
+    await checkIndexAPR(index);
   })
 
-  let mostSupportedToken: string;
-  let mostSupportedTokenSymbol: string
+  // describe('Interactions', () => {
+  //   it('Accuracy', async () => {
+  //     const tokens = await registry.getSupportedTokens();
+  //     const counts = await Promise.all(tokens.map(t => registry.getAdaptersCount(t)));
+  //     const mostSupportedTokens = tokens.filter((t, i) => counts[i].gt(2));
+  //     console.log(`-- TESTING HYPOTHETICAL APRS FOR DEPOSIT OF 100 TOKENS --`)
+  //     for (const token of mostSupportedTokens) {
+  //       const { adapter: adapterAddress } = await registry.getAdapterWithHighestAPR(token);
+  //       await testAdapterHypotheticalAPR(token, adapterAddress, true)
+  //     }
+  //     for (const token of mostSupportedTokens) {
+  //       const adapters = await registry.getAdaptersList(token);
+  //       const names = await Promise.all(adapters.map(async (a) => (await getContract(a, 'IErc20Adapter')).name()));
+  //       const adapterAddress = adapters.find((a, i) => names[i].includes('DyDx'));
+  //       if (adapterAddress) {
+  //         await testAdapterHypotheticalAPR(token, adapterAddress)
+  //       }
+  //     }
+  //   })
 
-  it('Summary', async () => {
-    console.log(`Full setup cost ${gasTotal} gas including deployment and protocol mapping`);
-    const tokens = await registry.getSupportedTokens()
-    const wrappers = await Promise.all(tokens.map(t => registry.getAdaptersList(t)));
-    const wrapperCounts = wrappers.map(w => w.length)
-    const totalWrappers = wrapperCounts.reduce((prev,next) => prev + next, 0);
-    console.log(`Mapped ${tokens.length} total assets and ${totalWrappers} wrappers`);
-    console.log(`Min ${Math.min(...wrapperCounts)} | Max ${Math.max(...wrapperCounts)} | Avg ${Math.floor(totalWrappers / tokens.length)}`);
-    console.log(`-- ${wrapperCounts.filter(c => c === 1).length} assets with 1 wrapper`)
-    console.log(`-- ${wrapperCounts.filter(c => c === 2).length} assets with 2 wrappers`)
-    console.log(`-- ${wrapperCounts.filter(c => c > 2).length} assets with >2 wrappers`)
-    console.log(`-- ${wrapperCounts.filter(c => c > 3).length} assets with >3 wrappers`)
-    const _max = Math.max(...wrapperCounts)
-    const token = tokens.find((t, i) => wrapperCounts[i] === _max);
-    mostSupportedTokenSymbol = await (await ethers.getContractAt('IERC20Metadata', token as string)).symbol()
-    console.log(mostSupportedTokenSymbol, 'is the most supported asset with', _max, 'adapters.');
-    mostSupportedToken = token as string;
-  })
+  //   it('COST', async () => {
+  //     const tokens = await registry.getSupportedTokens();
+  //     const counts = await Promise.all(tokens.map(t => registry.getAdaptersCount(t)));
+  //     const mostSupportedTokens = tokens.filter((t, i) => counts[i].gt(2));
+  //     console.log(`-- TESTING HYPOTHETICAL APRS FOR DEPOSIT OF 100 TOKENS --`)
+  //     for (const token of mostSupportedTokens) {
+  //       const { adapter: adapterAddress } = await registry.getAdapterWithHighestAPR(token);
+  //       await testAdapterDeposit(token, adapterAddress)
+  //     }
+  //   })
 
-  it('getAdapterWithHighestAPR()', async () => {
-    const bestApr = await registry.getAdapterWithHighestAPR(mostSupportedToken);
-    console.log(`The highest APR available for ${mostSupportedTokenSymbol} it is ${(parseFloat(formatEther(bestApr.apr)) * 100).toFixed(2)}% on ${await (await ethers.getContractAt('IERC20Metadata', bestApr.adapter as string)).name()}`);
-    console.log(`This query took ${(await registry.estimateGas.getAdapterWithHighestAPR(mostSupportedToken)).toNumber()} gas to execute`)
-  })
+  //   let mostSupportedToken: string;
+  //   let mostSupportedTokenSymbol: string
 
-  it('getAdapterWithHighestAPRForDeposit', async () => {
-    const deposit = BigNumber.from(10).pow(25)
-    const bestApr = await registry.getAdapterWithHighestAPRForDeposit(mostSupportedToken, deposit, constants.AddressZero);
-    console.log(`With a deposit of 1m ${mostSupportedTokenSymbol}, the highest APR available is ${(parseFloat(formatEther(bestApr.apr)) * 100).toFixed(2)}% on ${await (await ethers.getContractAt('IERC20Metadata', bestApr.adapter as string)).name()}`);
-    console.log(`This query took ${(await registry.estimateGas.getAdapterWithHighestAPRForDeposit(mostSupportedToken, deposit, constants.AddressZero)).toNumber()} gas to execute`);
-    const adapter: IErc20Adapter = await getContract(bestApr.adapter, 'IErc20Adapter');
-    // console.log(await adapter.token());
-  })
+    it('Summary', async () => {
+      console.log(`Full setup cost ${gasTotal} gas including deployment and protocol mapping`);
+      const tokens = await registry.getSupportedTokens()
+      const wrappers = await Promise.all(tokens.map(t => registry.getAdaptersList(t)));
+      const wrapperCounts = wrappers.map(w => w.length)
+      const totalWrappers = wrapperCounts.reduce((prev,next) => prev + next, 0);
+      console.log(`Mapped ${tokens.length} total assets and ${totalWrappers} wrappers`);
+      console.log(`Min ${Math.min(...wrapperCounts)} | Max ${Math.max(...wrapperCounts)} | Avg ${Math.floor(totalWrappers / tokens.length)}`);
+      console.log(`-- ${wrapperCounts.filter(c => c === 1).length} assets with 1 wrapper`)
+      console.log(`-- ${wrapperCounts.filter(c => c === 2).length} assets with 2 wrappers`)
+      console.log(`-- ${wrapperCounts.filter(c => c > 2).length} assets with >2 wrappers`)
+      console.log(`-- ${wrapperCounts.filter(c => c > 3).length} assets with >3 wrappers`)
+      // const _max = Math.max(...wrapperCounts)
+      // const token = tokens.find((t, i) => wrapperCounts[i] === _max);
+      // mostSupportedTokenSymbol = await (await ethers.getContractAt('IERC20Metadata', token as string)).symbol()
+      // console.log(mostSupportedTokenSymbol, 'is the most supported asset with', _max, 'adapters.');
+      // mostSupportedToken = token as string;
+    })
+
+  //   it('getAdapterWithHighestAPR()', async () => {
+  //     const bestApr = await registry.getAdapterWithHighestAPR(mostSupportedToken);
+  //     console.log(`The highest APR available for ${mostSupportedTokenSymbol} it is ${(parseFloat(formatEther(bestApr.apr)) * 100).toFixed(2)}% on ${await (await ethers.getContractAt('IERC20Metadata', bestApr.adapter as string)).name()}`);
+  //     console.log(`This query took ${(await registry.estimateGas.getAdapterWithHighestAPR(mostSupportedToken)).toNumber()} gas to execute`)
+  //   })
+
+  //   it('getAdapterWithHighestAPRForDeposit', async () => {
+  //     const deposit = BigNumber.from(10).pow(27)
+  //     const {
+  //       aprs,
+  //       adapters
+  //     } = await registry["getAdaptersSortedByAPRWithDeposit(address,uint256,address)"](mostSupportedToken, deposit.div(3), constants.AddressZero);
+  //     //getAdapterWithHighestAPRForDeposit(mostSupportedToken, deposit, constants.AddressZero);
+  //     for (let i = 0; i < 3; i++) {
+  //       const bestApr = aprs[i];
+  //       const adapter = adapters[i]
+  //       console.log(
+  //         `With a deposit of 1m ${mostSupportedTokenSymbol}, the highest APR available is ${
+  //         (parseFloat(formatEther(bestApr)) * 100).toFixed(2)}% on ${await (await ethers.getContractAt('IERC20Metadata', adapter as string)).name()}`);
+  //     }
+  //     console.log(`This query took ${(await registry.estimateGas["getAdaptersSortedByAPRWithDeposit(address,uint256,address)"](mostSupportedToken, deposit.div(3), constants.AddressZero)).toNumber()} gas to execute`);
+  //     // const adapter: IErc20Adapter = await getContract(bestApr.adapter, 'IErc20Adapter');
+  //     // console.log(await adapter.token());
+  //   })
+  // })
 })
