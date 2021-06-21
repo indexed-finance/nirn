@@ -3,7 +3,7 @@ import { expect } from "chai"
 import { BigNumber, constants } from "ethers"
 import { waffle } from "hardhat"
 import { AaveV2Erc20Adapter, IAaveDistributionManager, IERC20, IStakedAave } from "../../typechain"
-import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone, getNextContractAddress, latest, advanceTimeAndBlock, resetFork } from '../shared'
+import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone, getNextContractAddress, latest, advanceTimeAndBlock } from '../shared'
 
 describe('AaveV2Erc20Adapter', () => {
   const [wallet, wallet1, wallet2] = waffle.provider.getWallets();

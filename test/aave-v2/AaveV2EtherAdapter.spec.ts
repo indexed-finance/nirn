@@ -1,4 +1,3 @@
-import { getAddress } from '@ethersproject/address'
 import { expect } from 'chai'
 import { BigNumber, constants } from 'ethers'
 import { ethers, waffle } from 'hardhat'
