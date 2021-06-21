@@ -3,12 +3,12 @@ pragma solidity =0.7.6;
 
 import "../interfaces/CompoundInterfaces.sol";
 import "./LowGasSafeMath.sol";
-import "./SignedAddition.sol";
+import "./MinimalSignedMath.sol";
 
 
 library CTokenParams {
   using LowGasSafeMath for uint256;
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
 
   uint256 internal constant EXP_SCALE = 1e18;
   uint256 internal constant HALF_EXP_SCALE = 5e17;
