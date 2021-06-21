@@ -20,6 +20,7 @@ interface IFusePool {
   function enforceWhitelist() external view returns (bool);
   function getAllMarkets() external view returns (IFToken[] memory);
   function mintGuardianPaused(address cToken) external view returns (bool);
+  function oracle() external view returns (address);
 }
 
 
