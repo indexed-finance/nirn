@@ -12,8 +12,9 @@ import {
 } from '../interfaces/AaveV2Interfaces.sol';
 import '../interfaces/CompoundInterfaces.sol';
 import '../interfaces/FulcrumInterfaces.sol';
+import { IFusePoolDirectory, IFusePool } from "../interfaces/FuseInterfaces.sol";
 import '../interfaces/YearnInterfaces.sol';
-import '../libraries/ReserveConfigurationLib.sol';
+import {ReserveConfigurationLib} from '../libraries/ReserveConfigurationLib.sol';
 import '../libraries/SymbolHelper.sol';
 import 'hardhat/console.sol';
 
@@ -24,9 +25,11 @@ contract TestMapper {
   AaveProviderV2 internal constant AV2 = AaveProviderV2(0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5);
   IComptroller internal constant COMP = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
   IComptroller internal constant CREAM = IComptroller(0x3d5BC3c8d13dcB8bF317092d84783c2697AE9258);
+  IComptroller internal constant IRON = IComptroller(0xAB1c342C7bf5Ec5F02ADEA1c2270670bCa144CbB);
   IBZX internal constant BZX = IBZX(0xD8Ee69652E4e4838f2531732a46d1f7F584F0b7f);
   IYearnRegistry internal constant YEARN = IYearnRegistry(0x3eE41C098f9666ed2eA246f4D2558010e59d63A0);
   address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+  IFusePoolDirectory internal constant FUSE = IFusePoolDirectory(0x835482FE0532f169024d5E9410199369aAD5C77E);
 
   function aaveV1() external view {
     AaveCoreV1 core = AV1.getLendingPoolCore();
@@ -82,6 +85,14 @@ contract TestMapper {
     }
   }
 
+  function fuse() external view {
+    IFusePoolDirectory.FusePool[] memory fusePools = FUSE.getAllPools();
+    uint256 len = fusePools.length;
+    for (uint256 i; i < len; i++) {
+      console.log("Oracle: ", fusePools[i].comptroller.oracle());
+    }
+  }
+
   function compound() external view {
     ICToken[] memory cTokens = COMP.getAllMarkets();
     uint256 len = cTokens.length;
@@ -125,6 +136,41 @@ contract TestMapper {
       address underlying;
       ICToken cToken = cTokens[i];
       if (CREAM.mintGuardianPaused(address(cToken))) {
+        continue;
+      }
+      try cToken.underlying{gas: 25000}() returns (address _underlying) {
+        underlying = _underlying;
+        if (underlying == address(0)) {
+          underlying = WETH;
+        }
+      } catch {
+        underlying = WETH;
+      }
+      string memory symbol = underlying == WETH ? 'ETH' : SymbolHelper.getSymbol(underlying);
+      console.log(
+        string(
+          abi.encodePacked(
+            "testAdapter(getAddress('0x",
+            toAsciiString(underlying),
+            "'), getAddress('0x",
+            toAsciiString(address(cToken)),
+            "'), '",
+            symbol,
+            "');"
+          )
+        )
+      );
+    }
+  }
+
+  function iron() external view {
+    ICToken[] memory cTokens = IRON.getAllMarkets();
+    uint256 len = cTokens.length;
+
+    for (uint256 i = 0; i < len; i++) {
+      address underlying;
+      ICToken cToken = cTokens[i];
+      if (IRON.mintGuardianPaused(address(cToken))) {
         continue;
       }
       try cToken.underlying{gas: 25000}() returns (address _underlying) {
