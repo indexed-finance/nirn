@@ -7,9 +7,9 @@ Conceptually, Nirn is similar to Yearn's [iTokens](https://github.com/yearn/itok
 Each Nirn vault can split its capital among several lending markets, and does not use permissioned rebalancer accounts to determine how it is split. Instead, optimal allocations can be calculated off-chain by anyone and suggested to the vault contract, which then verifies that the suggested rebalance would increase the vault's net interest rate. This both prevents any reliance on the developers of Indexed and ensures that if a better allocation of capital is possible, anyone can make the vault use it.
 
 
-## Testing
+# Testing
 
-### Set Up **(Important)**
+## Set Up **(Important)**
 
 This repository exclusively executes test against forks of mainnet Ethereum. In order to run the tests, you will need to add an API key for an RPC provider with archive capabilities.
 
@@ -25,22 +25,29 @@ ALCHEMY_API_KEY="YOUR_API_KEY_HERE"
 
 If you use a provider other than Alchemy, you will need to modify hardhat.config.ts to use a different RPC url.
 
+**Important Note:** The first time you run tests, they will take quite a while to run. This is not an error - hardhat simply has to request a lot of data from the archive node in order to run the tests against a mainnet fork. Subsequent tests will be much faster because the data will be cached.
 
-### Running Tests
+## Running Tests
 
-`yarn test`
+The first time you run tests, you must run `yarn compile` first, otherwise the test script will fail because the `typechain/` directory will not exist and typescript will throw an error.
 
-Runs all tests in `test/`
+**Run all tests**
+> `yarn test`
 
-Because this repository has tests for (almost) every specific token for each supported protocol, it is usually better to run tests individually, e.g. `yarn test ./test/compound/CErc20Adapter.spec.ts`
+**Run specific test**
 
-`yarn compile`
+> `yarn test ./test/test_file_path`
+
+Because this repository has tests for (almost) every specific token for each supported protocol, it is usually better to run tests individually.
+
+**Compile contracts and typescript interfaces**
+> `yarn compile`
 
 Compiles artifacts into `artifacts/` and generates typechain interfaces in `typechain/`
 
-`yarn lint`
+**Run solhint**
 
-Runs solhint against the contracts.
+> `yarn lint`
 
 ## Smart Contracts
 
