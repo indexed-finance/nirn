@@ -3,7 +3,6 @@ pragma solidity =0.7.6;
 
 import "../interfaces/CompoundInterfaces.sol";
 import "./LowGasSafeMath.sol";
-import "hardhat/console.sol";
 
 
 library CyTokenParams {
