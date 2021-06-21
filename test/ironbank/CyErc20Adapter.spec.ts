@@ -1,15 +1,10 @@
 import { getAddress } from "@ethersproject/address"
-import { formatEther, formatUnits, parseUnits } from "@ethersproject/units"
-import { expect } from "chai"
-import { BigNumber, constants } from "ethers"
-import { ethers, waffle } from "hardhat"
-import { CyErc20Adapter, ICToken, IERC20 } from "../../typechain"
+import { CyErc20Adapter } from "../../typechain"
 import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
-import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone, resetFork, sendEtherTo, isPairToken, getIERC20, advanceTimeAndBlock, IronBankConverter } from '../shared'
+import { deployContract, IronBankConverter } from '../shared'
 
 
 describe('CyErc20Adapter', () => {
-  const [wallet, wallet1] = waffle.provider.getWallets();
   let implementation: CyErc20Adapter;
 
   before(async () => {
