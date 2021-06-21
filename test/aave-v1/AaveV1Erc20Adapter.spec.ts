@@ -1,9 +1,8 @@
 import { getAddress } from "@ethersproject/address"
-import { expect } from "chai"
-import { BigNumber, constants } from "ethers"
 import { waffle } from "hardhat"
 import { AaveV1Erc20Adapter, IERC20 } from "../../typechain"
-import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone } from '../shared'
+import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
+import { deployContract, AaveConverter } from '../shared'
 
 
 describe('AaveV1Erc20Adapter', () => {
@@ -17,116 +16,17 @@ describe('AaveV1Erc20Adapter', () => {
     implementation = await deployContract('AaveV1Erc20Adapter', '0x24a42fD28C976A61Df5D00D0599C34c4f90748c8');
   })
 
-  const testAdapter = (underlying: string, atoken: string, symbol: string) => describe(`a${symbol}`, () => {
-    let amountMinted: BigNumber;
-    
-    before(async () => {
-      token = await getContract(underlying, 'IERC20')
-      aToken = await getContract(atoken, 'IERC20')
-      adapter = await deployClone(implementation, 'AaveV1Erc20Adapter');
-      await adapter.initialize(token.address, aToken.address);
-      await token.approve(adapter.address, constants.MaxUint256);
-      await aToken.approve(adapter.address, constants.MaxUint256);
-      amountMinted = await getTokens(10)
-    })
-
-    async function getTokens(amount: number) {
-      const decimals = await (await getContract(underlying, 'IERC20Metadata')).decimals();
-      const tokenAmount = getBigNumber(amount, decimals);
-      await sendTokenTo(underlying, wallet.address, tokenAmount);
-      return tokenAmount;
-    }
-  
-    describe('settings', () => {
-      it('name()', async () => {
-        expect(await adapter.name()).to.eq(`Aave V1 ${symbol} Adapter`);
-      })
-  
-      it('token()', async () => {
-        expect(await adapter.token()).to.eq(aToken.address);
-      })
-  
-      it('underlying()', async () => {
-        expect(await adapter.underlying()).to.eq(token.address);
-      })
-    })
-  
-    describe('deposit()', () => {
-      it('Should revert if caller has insufficient balance', async () => {
-        await expect(adapter.connect(wallet1).deposit(getBigNumber(1))).to.be.revertedWith('TH:STF')
-      })
-  
-      it('Should mint aToken and transfer to caller', async () => {
-        await expect(adapter.deposit(amountMinted))
-          .to.emit(token, 'Transfer')
-          .withArgs(wallet.address, adapter.address, amountMinted)
-          .to.emit(aToken, 'Transfer')
-          .withArgs(adapter.address, wallet.address, amountMinted);
-        expect(await token.balanceOf(wallet.address)).to.eq(0);
-        expect(await aToken.balanceOf(wallet.address)).to.eq(amountMinted);
-      })
-    })
-  
-    describe('balanceWrapped()', () => {
-      it('Should return caller balance in aToken', async () => {
-        expect(await adapter.balanceWrapped()).to.eq(amountMinted);
-        expect(await adapter.connect(wallet1).balanceWrapped()).to.eq(0);
-      })
-    })
-  
-    describe('balanceUnderlying()', () => {
-      it('Should return caller balance in aToken (aToken convertible 1:1)', async () => {
-        expect(await adapter.balanceUnderlying()).to.eq(amountMinted);
-        expect(await adapter.connect(wallet1).balanceUnderlying()).to.eq(0);
-      })
-    })
-  
-    describe('getHypotheticalAPR()', () => {
-      it('Positive should decrease APR', async () => {
-        const apr = await adapter.getAPR();
-        if (apr.gt(0)) {
-          expect(await adapter.getHypotheticalAPR(getBigNumber(1))).to.be.lt(apr);
-        }
-      })
-  
-      it('Negative should increase APR', async () => {
-        const apr = await adapter.getAPR();
-        if (apr.gt(0)) {
-          expect(await adapter.getHypotheticalAPR(getBigNumber(1).mul(-1))).to.be.gt(apr);
-        }
-      })
-    })
-  
-    describe('withdraw()', () => {
-      it('Should revert if caller has insufficient balance', async () => {
-        await expect(adapter.connect(wallet1).withdraw(getBigNumber(1))).to.be.revertedWith('TH:STF')
-      })
-  
-      it('Should burn aToken and redeem underlying', async () => {
-        const balance = await aToken.balanceOf(wallet.address);
-        await expect(adapter.withdraw(balance))
-          .to.emit(aToken, 'Transfer')
-          .withArgs(wallet.address, adapter.address, balance)
-          .to.emit(token, 'Transfer')
-          .withArgs(adapter.address, wallet.address, balance);
-        expect(await token.balanceOf(wallet.address)).to.eq(balance);
-      })
-    })
-  
-    describe('withdrawAll()', () => {
-      before(async () => {
-        amountMinted = await getTokens(10)
-        await adapter.deposit(amountMinted);
-      })
-  
-      it('Should burn all caller aToken and redeem underlying', async () => {
-        const balance = await aToken.balanceOf(wallet.address);
-        await adapter.withdrawAll();
-        expect(await token.balanceOf(wallet.address)).to.be.gte(balance);
-        expect(await aToken.balanceOf(wallet.address)).to.eq(0);
-      })
-    })
-  });
+  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => behavesLikeErc20Adapter(
+    () => implementation,
+    async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
+    async (adapter, underlying, token) => underlying.balanceOf('0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3'),
+    AaveConverter,
+    _underlying,
+    _ctoken,
+    'Aave V1',
+    'a',
+    symbol
+  );
 
   testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0xfc1e690f61efd961294b3e1ce3313fbd8aa4f85d'), 'DAI');
   testAdapter(getAddress('0x0000000000085d4780b73119b644ae5ecd22b376'), getAddress('0x4da9b813057d04baef4e5800e36083717b4a0341'), 'TUSD');
