@@ -1,31 +1,83 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
+
 interface IAdapterRegistry {
-  function getProtocolAdapters() external view returns (address[] memory adapters);
+/* ========== Events ========== */
 
-  function getProtocolMetadata(uint256 id)
-    external
-    view
-    returns (
-      address protocolAdapter,
-      uint256 adaptersCount,
-      string memory name
-    );
+  event ProtocolAdapterAdded(uint256 protocolId, address protocolAdapter);
 
-  function isSupported(address underlying) external view returns (bool);
+  event ProtocolAdapterRemoved(uint256 protocolId);
 
-  function getSupportedTokens() external view returns (address[] memory list);
+  event TokenAdapterAdded(address adapter, uint256 protocolId, address underlying, address wrapper);
 
-  function getAdaptersList(address underlying) external view returns (address[] memory list);
+  event TokenAdapterRemoved(address adapter, uint256 protocolId, address underlying, address wrapper);
+
+  event TokenSupportAdded(address underlying);
+
+  event TokenSupportRemoved(address underlying);
+
+/* ========== Structs ========== */
+
+  struct TokenAdapter {
+    address adapter;
+    uint96 protocolId;
+  }
+
+/* ========== Storage ========== */
+
+  function protocolsCount() external view returns (uint256);
+
+  function protocolAdapters(uint256 id) external view returns (address protocolAdapter);
+
+  function protocolAdapterIds(address protocolAdapter) external view returns (uint256 id);
+
+/* ========== Protocol Adapter Management ========== */
+
+  function addProtocolAdapter(address protocolAdapter) external returns (uint256 id);
+
+  function removeProtocolAdapter(address protocolAdapter) external;
+
+/* ========== Token Adapter Management ========== */
 
   function addTokenAdapter(address adapter) external;
 
   function addTokenAdapters(address[] calldata adapters) external;
 
-  function addProtocolAdapter(address protocolAdapter) external;
+  function removeTokenAdapter(address adapter) external;
+
+/* ========== Protocol Queries ========== */
+
+  function getProtocolAdapters() external view returns (address[] memory adapters);
+
+  function getProtocolMetadata(uint256 id) external view returns (address protocolAdapter, string memory name);
+
+/* ========== Supported Token Queries ========== */
+
+  function isSupported(address underlying) external view returns (bool);
+
+  function getSupportedTokens() external view returns (address[] memory list);
+
+/* ========== Token Adapter Queries ========== */
+
+  function isApprovedAdapter(address adapter) external view returns (bool);
+
+  function getAdaptersList(address underlying) external view returns (address[] memory list);
+
+  function getAdapterForWrapperToken(address wrapperToken) external view returns (address);
+
+  function getAdaptersCount(address underlying) external view returns (uint256);
 
   function getAdaptersSortedByAPR(address underlying)
+    external
+    view
+    returns (address[] memory adapters, uint256[] memory aprs);
+
+  function getAdaptersSortedByAPRWithDeposit(
+    address underlying,
+    uint256 deposit,
+    address excludingAdapter
+  )
     external
     view
     returns (address[] memory adapters, uint256[] memory aprs);
@@ -38,3 +90,4 @@ interface IAdapterRegistry {
     address excludingAdapter
   ) external view returns (address adapter, uint256 apr);
 }
+
