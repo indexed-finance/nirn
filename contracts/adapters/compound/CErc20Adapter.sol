@@ -68,7 +68,21 @@ contract CErc20Adapter is AbstractErc20Adapter() {
 
   function getAPR() external view virtual override returns (uint256) {
     ICToken cToken = ICToken(token);
-    return cToken.supplyRatePerBlock().mul(2102400).add(getRewardsAPR());
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = CTokenParams.getInterestRateParameters(address(cToken));
+    uint256 liquidityTotal = cashPrior.add(borrowsPrior).sub(reservesPrior);
+
+    return IInterestRateModel(model).getSupplyRate(
+      cashPrior,
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa
+    ).mul(2102400).add(getRewardsAPR(cToken, liquidityTotal));
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
