@@ -1,53 +1,45 @@
-// SPDX-License-Identifier: MIT
-pragma solidity =0.7.6;
 pragma abicoder v2;
 
-import "../../interfaces/DyDxInterfaces.sol";
 import "../../interfaces/ITokenAdapter.sol";
-import "../../interfaces/IERC20Metadata.sol";
-import "../../libraries/LowGasSafeMath.sol";
+import "../../interfaces/DyDxInterfaces.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/SymbolHelper.sol";
-import "../../libraries/CloneLibrary.sol";
 import "../../libraries/SignedAddition.sol";
+import "../../vaults/ERC20.sol";
 
 
-contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
-  using SignedAddition for uint256;
+contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
   using SymbolHelper for address;
+  using SignedAddition for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
 /* ========== Constants ========== */
 
   uint256 public constant DECIMAL = 10 ** 18;
-  IDyDx public immutable dydx;
+  IDyDx public constant dydx = IDyDx(0x1E0447b19BB6EcFdAe1e4AE1694b0C3659614e4e);
 
 /* ========== Storage ========== */
 
   address public override underlying;
-  address public override token;
-  address public dydxUserModuleImplementation;
-  uint256 public marketId;
-  mapping(address => address) public userModules;
+  uint96 public marketId;
 
-/* ========== Constructor & Initializer ========== */
-
-  constructor(IDyDx _dydx) {
-    dydx = _dydx;
+  function token() external view virtual override returns (address) {
+    return address(this);
   }
 
+/* ========== Initializer ========== */
+
   function initialize(address _underlying, uint256 _marketId) external virtual {
+    require(underlying == address(0), "initialized");
     underlying = _underlying;
-    token = _underlying;
-    marketId = _marketId;
-    dydxUserModuleImplementation = address(new DyDxUserModule(dydx, underlying, _marketId));
+    marketId = uint96(_marketId);
     underlying.safeApproveMax(address(dydx));
   }
 
 /* ========== Metadata Queries ========== */
 
-  function name() external view override returns (string memory) {
+  function name() external view virtual override returns (string memory) {
     return string(abi.encodePacked(
       "DyDx ",
       underlying.getSymbol(),
@@ -55,15 +47,31 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
     ));
   }
 
-/* ========== User Modules ========== */
+  function balance() public view returns (uint256) {
+    Wei memory bal = dydx.getAccountWei(Info(address(this), 0), marketId);
+    return bal.value;
+  }
 
-  function getOrCreateUserModule() internal returns (DyDxUserModule) {
-    address module = userModules[msg.sender];
-    if (module == address(0)) {
-      module = (userModules[msg.sender] = CloneLibrary.createClone(dydxUserModuleImplementation));
-      DyDxUserModule(module).initialize(msg.sender);
-    }
-    return DyDxUserModule(module);
+/* ========== Conversion Queries ========== */
+
+  function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
+    uint256 bal = balance();
+    uint256 supply = totalSupply;
+    return supply == 0 ? underlyingAmount : (underlyingAmount.mul(supply) / bal);
+  }
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return tokenAmount.mul(balance()) / totalSupply;
+  }
+
+/* ========== Caller Balance Queries ========== */
+
+  function balanceWrapped() public view override returns (uint256) {
+    return balanceOf[msg.sender];
+  }
+
+  function balanceUnderlying() external view virtual override returns (uint256) {
+    return balanceOf[msg.sender].mul(balance()) / totalSupply;
   }
 
 /* ========== Performance Queries ========== */
@@ -72,8 +80,9 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
     uint256 _marketId = marketId;
     uint256 rate = dydx.getMarketInterestRate(_marketId).value;
     uint256 aprBorrow = rate * 31622400;
-    uint256 borrow = dydx.getMarketTotalPar(_marketId).borrow;
-    uint256 supply = dydx.getMarketTotalPar(_marketId).supply;
+    Set memory marketPar = dydx.getMarketTotalPar(_marketId);
+    uint256 borrow = marketPar.borrow;
+    uint256 supply = marketPar.supply;
     uint256 usage = (borrow.mul(DECIMAL)) / supply;
     apr = ((aprBorrow.mul(usage)) / DECIMAL).mul(dydx.getEarningsRate().value) / DECIMAL;
   }
@@ -82,86 +91,44 @@ contract DyDxErc20Adapter is IErc20Adapter, DyDxStructs {
     uint256 _marketId = marketId;
     uint256 rate = dydx.getMarketInterestRate(_marketId).value;
     uint256 aprBorrow = rate * 31622400;
-    uint256 borrow = dydx.getMarketTotalPar(_marketId).borrow;
+    Set memory marketPar = dydx.getMarketTotalPar(_marketId);
+    uint256 borrow = marketPar.borrow;
     uint256 supply = uint256(dydx.getMarketTotalPar(_marketId).supply).add(liquidityDelta);
     uint256 usage = (borrow.mul(DECIMAL)) / supply;
     apr = ((aprBorrow.mul(usage)) / DECIMAL).mul(dydx.getEarningsRate().value) / DECIMAL;
   }
 
-/* ========== Caller Balance Queries ========== */
-
-  function balanceWrapped() public view virtual override returns (uint256) {
-    address module = userModules[msg.sender];
-    if (module == address(0)) {
-      return 0;
-    }
-    IDyDx.Wei memory bal = dydx.getAccountWei(Info(module, 0), marketId);
-    return bal.value;
-  }
-
-  function balanceUnderlying() external view virtual override returns (uint256) {
-    return balanceWrapped();
-  }
-
 /* ========== Token Actions ========== */
 
-  function deposit(uint256 amountUnderlying) public virtual override returns (uint256 amountMinted) {
-    DyDxUserModule module = getOrCreateUserModule();
-    underlying.safeTransferFrom(msg.sender, address(module), amountUnderlying);
-    module.deposit(amountUnderlying);
-    amountMinted = amountUnderlying;
+  function deposit(uint256 amount) external override returns (uint256 shares) {
+    require(amount > 0, "DyDx: Mint failed");
+    shares = toWrappedAmount(amount);
+    underlying.safeTransferFrom(msg.sender, address(this), amount);
+    _mint(msg.sender, shares);
+    _deposit(amount);
   }
 
-  function _withdraw(uint256 amount, bool toUser) internal {
-    require(amount > 0, "DyDx: Burn failed");
-    DyDxUserModule module = getOrCreateUserModule();
-    module.withdraw(amount, toUser);
+  function withdraw(uint256 shares) public virtual override returns (uint256 amountOut) {
+    require(shares > 0, "DyDx: Burn failed");
+    amountOut = toUnderlyingAmount(shares);
+    _burn(msg.sender, shares);
+    _withdraw(amountOut, true);
   }
 
-  function withdraw(uint256 amountToken) public virtual override returns (uint256 amountReceived) {
-    amountReceived = amountToken;
-    _withdraw(amountToken, true);
+  function withdrawAll() public virtual override returns (uint256 amountReceived) {
+    return withdraw(balanceOf[msg.sender]);
   }
 
-  function withdrawAll() external virtual override returns (uint256 amountReceived) {
-    return withdraw(balanceWrapped());
+  function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 shares) {
+    require(amountUnderlying > 0, "DyDx: Burn failed");
+    shares = toWrappedAmount(amountUnderlying);
+    _burn(msg.sender, shares);
+    _withdraw(amountUnderlying, true);
   }
 
-  function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
-    amountBurned = withdraw(amountUnderlying);
-  }
-}
+/* ========== Internal Actions ========== */
 
-
-contract DyDxUserModule is DyDxStructs {
-  using TransferHelper for address;
-
-  IDyDx public immutable dydx;
-  address public immutable owner;
-  uint256 public immutable marketId;
-  address public immutable token;
-  address public user;
-
-  constructor(IDyDx _dydx, address _token, uint256 _marketId) {
-    dydx = _dydx;
-    owner = msg.sender;
-    marketId = _marketId;
-    token = _token;
-  }
-
-  modifier onlyOwner {
-    require(msg.sender == owner, "!owner");
-    _;
-  }
-
-  function initialize(address _user) external onlyOwner {
-    require(user == address(0), "initialized");
-    user = _user;
-    token.safeApprove(address(dydx), type(uint256).max);
-
-  }
-
-  function deposit(uint256 amount) external onlyOwner {
+  function _deposit(uint256 amount) internal {
     Info[] memory infos = new Info[](1);
     infos[0] = Info(address(this), 0);
 
@@ -179,7 +146,7 @@ contract DyDxUserModule is DyDxStructs {
     dydx.operate(infos, args);
   }
 
-  function withdraw(uint256 amount, bool toUser) external onlyOwner {
+  function _withdraw(uint256 amount, bool toUser) internal {
     Info[] memory infos = new Info[](1);
     infos[0] = Info(address(this), 0);
 
@@ -189,7 +156,7 @@ contract DyDxUserModule is DyDxStructs {
     act.accountId = 0;
     act.amount = amt;
     act.primaryMarketId = marketId;
-    act.otherAddress = toUser ? user : owner;
+    act.otherAddress = toUser ? msg.sender : address(this);
 
     ActionArgs[] memory args = new ActionArgs[](1);
     args[0] = act;
