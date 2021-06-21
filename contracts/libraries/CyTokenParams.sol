@@ -8,6 +8,8 @@ import "./LowGasSafeMath.sol";
 library CyTokenParams {
   using LowGasSafeMath for uint256;
 
+  uint256 internal constant EXP_SCALE = 1e18;
+
   function getInterestRateParameters(address token) internal view returns (
     address model,
     uint256 cashPrior,
@@ -55,8 +57,6 @@ library CyTokenParams {
 
     return cashPrior.add(borrowsPrior).sub(reservesPrior).mul(1e18) / ICToken(token).totalSupply();
   }
-
-  uint256 internal constant EXP_SCALE = 1e18;
 
   function truncate(uint256 x) internal pure returns (uint256) {
     return x / EXP_SCALE;
