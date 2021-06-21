@@ -7,7 +7,7 @@ import "../../interfaces/IWETH.sol";
 
 
 contract AaveV2EtherAdapter is IEtherAdapter {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using RayMul for uint256;
   using SymbolHelper for address;

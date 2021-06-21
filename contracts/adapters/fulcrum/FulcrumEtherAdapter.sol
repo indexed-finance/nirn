@@ -8,11 +8,11 @@ import "../../interfaces/IERC20Metadata.sol";
 import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 
 
 contract FulcrumEtherAdapter is IEtherAdapter {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 

@@ -4,11 +4,11 @@ pragma abicoder v2;
 
 import "./DyDxErc20Adapter.sol";
 import "../../interfaces/IWETH.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 
 
 contract DyDxEtherAdapter is DyDxErc20Adapter, IEtherAdapter {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 

@@ -10,12 +10,12 @@ import "../../libraries/TransferHelper.sol";
 import "../../libraries/SymbolHelper.sol";
 import "../../libraries/RayMul.sol";
 import "../../libraries/ReserveConfigurationLib.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 import "../../libraries/CloneLibrary.sol";
 
 
 contract AaveV2Erc20Adapter is IErc20Adapter {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using RayMul for uint256;
   using SymbolHelper for address;

@@ -7,12 +7,12 @@ import "../../interfaces/IWETH.sol";
 import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 import "../../libraries/RayDiv.sol";
 
 
 contract AaveV1EtherAdapter is AbstractEtherAdapter {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using RayDiv for uint256;
   using TransferHelper for address;

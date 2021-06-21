@@ -7,10 +7,10 @@ import "../../interfaces/IERC20.sol";
 import "../../interfaces/IWETH.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 
 contract YErc20Adapter is AbstractErc20Adapter() {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 

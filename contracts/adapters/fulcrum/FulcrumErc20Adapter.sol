@@ -9,11 +9,11 @@ import "../../interfaces/IERC20.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/SymbolHelper.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 
 
 contract FulcrumErc20Adapter is IErc20Adapter {
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
   using SymbolHelper for address;

@@ -4,13 +4,13 @@ import "../../interfaces/ITokenAdapter.sol";
 import "../../interfaces/DyDxInterfaces.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/SymbolHelper.sol";
-import "../../libraries/SignedAddition.sol";
+import "../../libraries/MinimalSignedMath.sol";
 import "../../vaults/ERC20.sol";
 
 
 contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
   using SymbolHelper for address;
-  using SignedAddition for uint256;
+  using MinimalSignedMath for uint256;
   using LowGasSafeMath for uint256;
   using TransferHelper for address;
 
