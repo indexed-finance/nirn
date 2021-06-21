@@ -2,37 +2,57 @@ import { getAddress } from "@ethersproject/address"
 import { expect } from "chai"
 import { BigNumber, constants } from "ethers"
 import { waffle } from "hardhat"
-import { AaveV2Erc20Adapter, IERC20 } from "../../typechain"
-import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone } from '../shared'
-
+import { AaveV2Erc20Adapter, IAaveDistributionManager, IERC20, IStakedAave } from "../../typechain"
+import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone, getNextContractAddress, latest, advanceTimeAndBlock, resetFork } from '../shared'
 
 describe('AaveV2Erc20Adapter', () => {
-  const [wallet, wallet1] = waffle.provider.getWallets();
+  const [wallet, wallet1, wallet2] = waffle.provider.getWallets();
   let implementation: AaveV2Erc20Adapter;
   let adapter: AaveV2Erc20Adapter;
   let token: IERC20;
   let aToken: IERC20;
-
-  before('Deploy implementation', async () => {
-    implementation = await deployContract('AaveV2Erc20Adapter', '0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5');
-  })
+  let userModule: string;
+  let incentives: IAaveDistributionManager
+  let stkAave: IStakedAave
+  let aave: IERC20
+  let lastUserModule: string
 
   const testAdapter = (underlying: string, atoken: string, symbol: string) => describe(`a${symbol}`, () => {
     let amountMinted: BigNumber;
     
     before(async () => {
+      implementation = await deployContract('AaveV2Erc20Adapter', '0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5');
       token = await getContract(underlying, 'IERC20')
       aToken = await getContract(atoken, 'IERC20')
+      aave = await getContract('0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9', 'IERC20')
+      if (symbol === 'AAVE') {
+        const balance = await aave.balanceOf(wallet.address);
+        if (balance.gt(0)) {
+          await aave.transfer(wallet1.address, balance)
+        }
+      }
+      incentives = await getContract('0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5', 'IAaveDistributionManager')
+      stkAave = await getContract('0x4da27a545c0c5B758a6BA100e3a049001de870f5', 'IStakedAave')
       adapter = await deployClone(implementation, 'AaveV2Erc20Adapter');
       await adapter.initialize(token.address, aToken.address);
       await token.approve(adapter.address, constants.MaxUint256);
       await aToken.approve(adapter.address, constants.MaxUint256);
       amountMinted = await getTokens(10)
+      lastUserModule = userModule;
+      userModule = await getNextContractAddress(adapter.address);
+      if (lastUserModule == userModule) {
+        throw new Error('USER MODULE IS THE SAMME ???')
+      }
     })
 
-    async function getTokens(amount: number) {
+    async function getTokenAmount(amount: number) {
       const decimals = await (await getContract(underlying, 'IERC20Metadata')).decimals();
       const tokenAmount = getBigNumber(amount, decimals);
+      return tokenAmount;
+    }
+
+    async function getTokens(amount: number) {
+      const tokenAmount = await getTokenAmount(amount);
       await sendTokenTo(underlying, wallet.address, tokenAmount);
       return tokenAmount;
     }
@@ -56,14 +76,42 @@ describe('AaveV2Erc20Adapter', () => {
         await expect(adapter.connect(wallet1).deposit(getBigNumber(1))).to.be.revertedWith('TH:STF')
       })
   
-      it('Should mint aToken and transfer to caller', async () => {
-        await expect(adapter.deposit(amountMinted))
+      it('Should mint aToken for user module', async () => {
+        const tx = adapter.deposit(amountMinted.div(2));
+        await expect(tx)
           .to.emit(token, 'Transfer')
-          .withArgs(wallet.address, adapter.address, amountMinted)
-          .to.emit(aToken, 'Transfer')
-          .withArgs(adapter.address, wallet.address, amountMinted);
-        expect(await token.balanceOf(wallet.address)).to.eq(0);
-        expect(await aToken.balanceOf(wallet.address)).to.eq(amountMinted);
+          .withArgs(wallet.address, userModule, amountMinted.div(2))
+        expect(await token.balanceOf(wallet.address)).to.eq(amountMinted.div(2));
+        expect(await aToken.balanceOf(userModule)).to.eq(amountMinted.div(2));
+      })
+
+      it('If token is incentivized, should claim stkAave and begin cooldown after first deposit', async () => {
+        if ((await incentives.getAssetData(aToken.address)).emissionPerSecond.gt(0)) {
+          await advanceTimeAndBlock(60)
+          expect(await incentives.getRewardsBalance([aToken.address], userModule)).to.be.gt(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
+          await adapter.deposit(amountMinted.div(2));
+          expect(await incentives.getRewardsBalance([aToken.address], userModule)).to.eq(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(await latest())
+        } else {
+          await adapter.deposit(amountMinted.div(2));
+        }
+      })
+
+      it('If token is incentivized, should claim Aave for user when cooldown is over', async () => {
+        if ((await incentives.getAssetData(aToken.address)).emissionPerSecond.gt(0)) {
+          let amount = await getTokens(1);
+          expect(await aave.balanceOf(wallet2.address)).to.eq(0)
+          await token.transfer(wallet2.address, amount)
+          await token.connect(wallet2).approve(adapter.address, constants.MaxUint256)
+          await adapter.connect(wallet2).deposit(amount.div(3))
+          await advanceTimeAndBlock(60)
+          await adapter.connect(wallet2).deposit(amount.div(3))
+          await advanceTimeAndBlock(864001)
+          await adapter.connect(wallet2).deposit(amount.div(3))
+          expect(await aave.balanceOf(wallet2.address)).to.be.gt(0)
+          await aave.connect(wallet2).transfer(wallet1.address, await aave.balanceOf(wallet2.address))
+        }
       })
     })
   
@@ -85,14 +133,15 @@ describe('AaveV2Erc20Adapter', () => {
       it('Positive should decrease APR', async () => {
         const apr = await adapter.getAPR();
         if (apr.gt(0)) {
-          expect(await adapter.getHypotheticalAPR(getBigNumber(1))).to.be.lt(apr);
+          expect(await adapter.getHypotheticalAPR(await getTokenAmount(1))).to.be.lt(apr);
         }
       })
   
       it('Negative should increase APR', async () => {
         const apr = await adapter.getAPR();
         if (apr.gt(0)) {
-          expect(await adapter.getHypotheticalAPR(getBigNumber(1).mul(-1))).to.be.gt(apr);
+          const bal = await token.balanceOf(aToken.address);
+          expect(await adapter.getHypotheticalAPR(bal.div(10).mul(-1))).to.be.gt(apr);
         }
       })
     })
@@ -103,16 +152,14 @@ describe('AaveV2Erc20Adapter', () => {
       })
   
       it('Should burn aToken and redeem underlying', async () => {
-        const balance = await aToken.balanceOf(wallet.address);
+        const balance = await aToken.balanceOf(userModule);
         await expect(adapter.withdraw(balance))
-          .to.emit(aToken, 'Transfer')
-          .withArgs(wallet.address, adapter.address, balance)
           .to.emit(token, 'Transfer')
-          .withArgs(adapter.address, wallet.address, balance);
+          .withArgs(aToken.address, wallet.address, balance)
         expect(await token.balanceOf(wallet.address)).to.eq(balance);
       })
     })
-  
+
     describe('withdrawAll()', () => {
       before(async () => {
         amountMinted = await getTokens(10)
@@ -122,8 +169,8 @@ describe('AaveV2Erc20Adapter', () => {
       it('Should burn all caller aToken and redeem underlying', async () => {
         const balance = await aToken.balanceOf(wallet.address);
         await adapter.withdrawAll();
-        expect(await token.balanceOf(wallet.address)).to.be.gte(balance);
-        expect(await aToken.balanceOf(wallet.address)).to.eq(0);
+        expect(await token.balanceOf(userModule)).to.be.gte(balance);
+        expect(await aToken.balanceOf(userModule)).to.eq(0);
       })
     })
   });
