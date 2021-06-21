@@ -2,10 +2,17 @@
 pragma solidity >=0.5.0;
 
 
-library SignedAddition {
+library MinimalSignedMath {
   function add(int256 a, int256 b) internal pure returns (int256) {
     int256 c = a + b;
     require((b >= 0 && c >= a) || (b < 0 && c < a), "SignedSafeMath: addition overflow");
+
+    return c;
+  }
+
+  function sub(int256 a, int256 b) internal pure returns (int256) {
+    int256 c = a - b;
+    require((b >= 0 && c <= a) || (b < 0 && c > a), "SignedSafeMath: subtraction overflow");
 
     return c;
   }
