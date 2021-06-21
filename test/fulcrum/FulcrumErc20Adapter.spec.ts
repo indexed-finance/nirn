@@ -1,16 +1,11 @@
 import { getAddress } from "@ethersproject/address"
 import { constants } from "ethers"
-import { waffle } from "hardhat"
-import { FulcrumErc20Adapter, IERC20 } from "../../typechain"
+import { FulcrumErc20Adapter } from "../../typechain"
 import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
 import { deployContract, FulcrumConverter } from '../shared'
 
 describe('FulcrumErc20Adapter', () => {
-  const [wallet, wallet1] = waffle.provider.getWallets();
   let implementation: FulcrumErc20Adapter;
-  let adapter: FulcrumErc20Adapter;
-  let token: IERC20;
-  let iToken: IERC20;
 
   before('Deploy implementation', async () => {
     implementation = await deployContract('FulcrumErc20Adapter');
