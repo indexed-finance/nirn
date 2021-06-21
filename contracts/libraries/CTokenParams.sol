@@ -3,11 +3,15 @@ pragma solidity =0.7.6;
 
 import "../interfaces/CompoundInterfaces.sol";
 import "./LowGasSafeMath.sol";
-import "hardhat/console.sol";
+import "./SignedAddition.sol";
 
 
 library CTokenParams {
   using LowGasSafeMath for uint256;
+  using SignedAddition for uint256;
+
+  uint256 internal constant EXP_SCALE = 1e18;
+  uint256 internal constant HALF_EXP_SCALE = 5e17;
 
   function getInterestRateParameters(address token) internal view returns (
     address model,
@@ -55,8 +59,7 @@ library CTokenParams {
 
     return cashPrior.add(borrowsPrior).sub(reservesPrior).mul(1e18) / ICToken(token).totalSupply();
   }
-
-  uint256 internal constant EXP_SCALE = 1e18;
+  
 
   function truncate(uint256 x) internal pure returns (uint256) {
     return x / EXP_SCALE;
