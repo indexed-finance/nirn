@@ -23,7 +23,7 @@ describe('CEtherAdapter', () => {
     token = await getContract('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', 'IERC20')
     cToken = await getContract('0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5', 'IERC20')
     adapter = await deployClone(implementation, 'CEtherAdapter');
-    await adapter["initialize(address,address,string)"](token.address, cToken.address, 'Compound');
+    await adapter.initialize(token.address, cToken.address);
     await token.approve(adapter.address, constants.MaxUint256);
     await cToken.approve(adapter.address, constants.MaxUint256);
     amountDeposited = await getTokens(10)
