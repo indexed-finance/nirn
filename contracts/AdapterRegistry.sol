@@ -3,111 +3,142 @@ pragma solidity =0.7.6;
 
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "./interfaces/ITokenAdapter.sol";
-import "./libraries/SortLibrary.sol";
+import "./libraries/ArrayHelper.sol";
 import "./interfaces/IProtocolAdapter.sol";
 
 
 contract AdapterRegistry is Ownable() {
-  using SortLibrary for address[];
+  using ArrayHelper for address[];
+  using ArrayHelper for EnumerableSet.AddressSet;
+  using EnumerableSet for EnumerableSet.AddressSet;
+
+/* ========== Events ========== */
+
+  event ProtocolAdapterAdded(uint256 protocolId, address protocolAdapter);
+
+  event ProtocolAdapterRemoved(uint256 protocolId);
+
+  event TokenAdapterAdded(address adapter, uint256 protocolId, address underlying, address wrapper);
+
+  event TokenAdapterRemoved(address adapter, uint256 protocolId, address underlying, address wrapper);
+
+  event TokenSupportAdded(address underlying);
+
+  event TokenSupportRemoved(address underlying);
 
 /* ========== Structs ========== */
 
-  struct Protocol {
-    address protocolAdapter;
-    address[] tokenAdapters;
+  struct TokenAdapter {
+    address adapter;
+    uint96 protocolId;
   }
 
 /* ========== Storage ========== */
-
-  // Array of protocol adapters
-  Protocol[] internal protocols;
-  // Protocol adapter to its ID
-  mapping(address => uint256) internal protocolIds;
+  uint256 public protocolsCount;
+  mapping(uint256 => address) public protocolAdapters;
+  mapping(address => uint256) public protocolAdapterIds;
   // All adapters for a given underlying token
   mapping(address => address[]) internal tokenAdapters;
+  // Adapters by wrapper
+  mapping(address => TokenAdapter) internal adaptersByWrapperToken;
   // All supported underlying tokens
-  address[] internal supportedTokens;
-
-/* ========== Constructor ========== */
-
-  constructor() {
-    Protocol memory protocol;
-    protocols.push(protocol);
-  }
+  EnumerableSet.AddressSet internal supportedTokens;
 
 /* ========== Modifiers ========== */
 
   modifier onlyProtocolOrOwner {
-    require(protocolIds[msg.sender] > 0 || msg.sender == owner(), "!approved");
+    require(protocolAdapterIds[msg.sender] > 0 || msg.sender == owner(), "!approved");
     _;
+  }
+
+  function getProtocolAdapterId(address protocolAdapter) internal view returns (uint256 id) {
+    require((id = protocolAdapterIds[protocolAdapter]) > 0, "!exists");
   }
 
 /* ========== Protocol Adapter Management ========== */
 
-  function addProtocolAdapter(address protocolAdapter) external onlyProtocolOrOwner {
-    require(protocolIds[protocolAdapter] == 0, "adapter exists");
-    uint256 id = protocols.length;
-    Protocol memory protocol;
-    protocol.protocolAdapter = protocolAdapter;
-    protocols.push(protocol);
-    protocolIds[protocolAdapter] = id;
+  function addProtocolAdapter(address protocolAdapter) external onlyProtocolOrOwner returns (uint256 id) {
+    require(protocolAdapter != address(0), "null");
+    require(protocolAdapterIds[protocolAdapter] == 0, "exists");
+    id = ++protocolsCount;
+    protocolAdapterIds[protocolAdapter] = id;
+    protocolAdapters[id] = protocolAdapter;
+    emit ProtocolAdapterAdded(id, protocolAdapter);
+  }
+
+  function removeProtocolAdapter(address protocolAdapter) external onlyOwner {
+    uint256 id = getProtocolAdapterId(protocolAdapter);
+    delete protocolAdapterIds[protocolAdapter];
+    delete protocolAdapters[id];
+    emit ProtocolAdapterRemoved(id);
   }
 
 /* ========== Token Adapter Management ========== */
 
-  function addTokenAdapter(IErc20Adapter adapter) external {
-    uint256 id = protocolIds[msg.sender];
-    require(id > 0, "!protocolAdapter");
+  function _addTokenAdapter(IErc20Adapter adapter, uint256 id) internal {
     address underlying = adapter.underlying();
+    address wrapper = adapter.token();
+    require(adaptersByWrapperToken[wrapper].protocolId == 0, "adapter exists");
     if (tokenAdapters[underlying].length == 0) {
-      supportedTokens.push(underlying);
+      supportedTokens.add(underlying);
+      emit TokenSupportAdded(underlying);
     }
     tokenAdapters[underlying].push(address(adapter));
+    adaptersByWrapperToken[wrapper] = TokenAdapter(address(adapter), uint96(id));
+    emit TokenAdapterAdded(address(adapter), id, underlying, wrapper);
+  }
+
+  function addTokenAdapter(IErc20Adapter adapter) external {
+    uint256 id = getProtocolAdapterId(msg.sender);
+    _addTokenAdapter(adapter, id);
   }
 
   function addTokenAdapters(IErc20Adapter[] calldata adapters) external {
-    uint256 id = protocolIds[msg.sender];
-    require(id > 0, "!protocolAdapter");
+    uint256 id = getProtocolAdapterId(msg.sender);
     uint256 len = adapters.length;
     for (uint256 i = 0; i < len; i++) {
       IErc20Adapter adapter = adapters[i];
-      address underlying = adapter.underlying();
-      if (tokenAdapters[underlying].length == 0) {
-        supportedTokens.push(underlying);
-      }
-      tokenAdapters[underlying].push(address(adapter));
+      _addTokenAdapter(adapter, id);
     }
   }
 
-  function sortAdapters(address underlying) external {
-    (address[] memory adapters,) = getAdaptersSortedByAPR(underlying);
-    tokenAdapters[underlying] = adapters;
+  function removeTokenAdapter(IErc20Adapter adapter) external {
+    address wrapper = adapter.token();
+    TokenAdapter memory adapterRecord = adaptersByWrapperToken[wrapper];
+    require(adapterRecord.adapter == address(adapter), "wrong adapter");
+    uint256 protocolId = adapterRecord.protocolId;
+    require(
+      msg.sender == owner() ||
+      msg.sender == protocolAdapters[protocolId],
+      "!authorized"
+    );
+    delete adaptersByWrapperToken[wrapper];
+    address underlying = adapter.underlying();
+    address[] storage adapters = tokenAdapters[underlying];
+    uint256 index = adapters.indexOf(address(adapter));
+    adapters.remove(index);
+    if (adapters.length == 0) {
+      supportedTokens.remove(underlying);
+      emit TokenSupportRemoved(underlying);
+    }
+    emit TokenAdapterRemoved(address(adapter), protocolId, underlying, wrapper);
   }
 
 /* ========== Protocol Queries ========== */
 
-  function getProtocolsCount() external view returns (uint256) {
-    return protocols.length - 1;
-  }
-
   function getProtocolAdapters() external view returns (address[] memory adapters) {
-    uint256 len = protocols.length - 1;
+    uint256 len = protocolsCount;
     adapters = new address[](len);
-    for (uint256 i = 1; i < len; i++) {
-      adapters[i - 1] = protocols[i].protocolAdapter;
+    for (uint256 i; i < len; i++) {
+      adapters[i] = protocolAdapters[i];
     }
   }
 
-  function getProtocolMetadata(uint256 id)
-    external
-    view
-    returns (address protocolAdapter, uint256 adaptersCount, string memory name)
-  {
-    Protocol storage protocol = protocols[id];
-    protocolAdapter = protocol.protocolAdapter;
+  function getProtocolMetadata(uint256 id) external view returns (address protocolAdapter, string memory name) {
+    protocolAdapter = protocolAdapters[id];
     require(protocolAdapter != address(0), "invalid id");
-    adaptersCount = protocol.tokenAdapters.length;
     name = IProtocolAdapter(protocolAdapter).protocol();
   }
 
@@ -118,14 +149,23 @@ contract AdapterRegistry is Ownable() {
   }
 
   function getSupportedTokens() external view returns (address[] memory list) {
-    list = supportedTokens;
+    list = supportedTokens.toArray();
   }
 
 /* ========== Token Adapter Queries ========== */
 
+  function isApprovedAdapter(address adapter) external view returns (bool) {
+    address wrapper = IErc20Adapter(adapter).token();
+    TokenAdapter memory adapterRecord = adaptersByWrapperToken[wrapper];
+    return adapterRecord.adapter == adapter;
+  }
+
   function getAdaptersList(address underlying) public view returns (address[] memory list) {
     list = tokenAdapters[underlying];
-    require(list.length > 0, "!adapters");
+  }
+
+  function getAdapterForWrapperToken(address wrapperToken) external view returns (address) {
+    return adaptersByWrapperToken[wrapperToken].adapter;
   }
 
   function getAdaptersCount(address underlying) external view returns (uint256) {
