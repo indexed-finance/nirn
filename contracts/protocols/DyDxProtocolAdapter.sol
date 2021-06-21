@@ -22,8 +22,8 @@ contract DyDxProtocolAdapter {
 
   constructor(IAdapterRegistry _registry) {
     registry = _registry;
-    erc20AdapterImplementation = address(new DyDxErc20Adapter(dydx));
-    _registry.addTokenAdapter(address(new DyDxEtherAdapter(dydx, weth, 0)));
+    erc20AdapterImplementation = address(new DyDxErc20Adapter());
+    _registry.addTokenAdapter(address(new DyDxEtherAdapter(0)));
   }
 
   function map(uint256 max) external {
