@@ -3,14 +3,14 @@ pragma solidity ^0.7.6;
 
 import "../interfaces/ITokenAdapter.sol";
 import "../libraries/LowGasSafeMath.sol";
-import "../libraries/SignedAddition.sol";
+import "../libraries/MinimalSignedMath.sol";
 
 
 // Sort of like ARPANET but with different letters
 library APRNet {
   using LowGasSafeMath for uint256;
-  using SignedAddition for uint256;
-  using SignedAddition for int256;
+  using MinimalSignedMath for uint256;
+  using MinimalSignedMath for int256;
 
   struct RebalanceParams {
     IErc20Adapter[] adapters;
