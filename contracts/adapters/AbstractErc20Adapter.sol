@@ -91,6 +91,7 @@ abstract contract AbstractErc20Adapter {
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual returns (uint256 amountBurned) {
+    require(amountUnderlying > 0, "withdraw 0");
     amountBurned = _burnUnderlying(amountUnderlying);
     underlying.safeTransfer(msg.sender, amountUnderlying);
   }
