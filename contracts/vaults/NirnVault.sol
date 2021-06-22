@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
+
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IAdapterRegistry.sol";
 import "../interfaces/ITokenAdapter.sol";
 import "../interfaces/IERC20.sol";
 import "../libraries/TransferHelper.sol";
+import "../libraries/SymbolHelper.sol";
 import "../libraries/LowGasSafeMath.sol";
 import "../libraries/APRNet.sol";
 import "../libraries/MinimalSignedMath.sol";
@@ -12,38 +15,54 @@ import "../libraries/Fraction.sol";
 import "./ERC20.sol";
 
 
-contract NirnVault is ERC20 {
+contract NirnVault is ERC20, Ownable() {
   using Fraction for uint256;
   using TransferHelper for address;
   using LowGasSafeMath for uint256;
   using MinimalSignedMath for uint256;
   using MinimalSignedMath for int256;
 
+/* ========== Events ========== */
+
+  event AdapterAdded(address adapter, address wrapper, uint256 weight);
+
+  event AdapterRemoved(address adapter);
+
+  event AdapterWeightUpdated(address adapter, uint256 weight);
+
 /* ========== Constants ========== */
 
-  IAdapterRegistry public constant registry = IAdapterRegistry(address(0));
+  IAdapterRegistry public immutable registry;
   /** @dev Address of a contract which can only execute specific functions and only allows EOAs to call. */
-  address public constant EOA_SAFE_CALLER = address(0);
+  address public immutable eoaSafeCaller;
+  /** @dev Underlying asset for the vault. */
+  address public immutable underlying;
+  string public name;
+  string public symbol;
 
 /* ========== Storage ========== */
 
   address public feeRecipient;
-  /** @dev Underlying asset for the vault. */
-  address public underlying;
   /** @dev Token adapters for the underlying token. */
   IErc20Adapter[] public adapters;
   /** @dev Weights for adapters at corresponding index as a fraction of 1e18 (sum must be 1e18). */
   uint256[] public weights;
   /** @dev Ratio of underlying token to keep in the vault for cheap deposits as a fraction of 1e18. */
-  uint256 public reserveRatio;
+  uint256 public reserveRatio = 1e17;
   /** @dev Tokens which can not be sold - wrapper tokens used by the adapters. */
   mapping(address => bool) public lockedTokens;
-  /** @dev Average amount of `underlying` paid to mint vault tokens. */
-  uint256 public averageEntryPrice;
   /** @dev Last price at which fees were taken. */
-  uint256 public priceAtLastFee;
+  uint256 public priceAtLastFee = 1e18;
   /** @dev Fee taken on profit as a fraction of 1e18. */
-  uint256 public performanceFee;
+  uint256 public performanceFee = 5e16;
+
+  function getAdapters() external view returns (IErc20Adapter[] memory _adapters) {
+    _adapters = adapters;
+  }
+
+  function getWeights() external view returns (uint256[] memory _weights) {
+    _weights = weights;
+  }
 
 /* ========== Modifiers ========== */
 
@@ -56,18 +75,51 @@ contract NirnVault is ERC20 {
    * adapters with low interest rates.
    */
   modifier onlyEOA {
-    require(msg.sender == tx.origin || msg.sender == EOA_SAFE_CALLER, "!EOA");
+    require(msg.sender == tx.origin || msg.sender == eoaSafeCaller, "!EOA");
     _;
   }
 
 /* ========== Underlying Balance Queries ========== */
 
+  constructor(
+    address _registry,
+    address _eoaSafeCaller,
+    address _underlying
+  ) {
+    registry = IAdapterRegistry(_registry);
+    eoaSafeCaller = _eoaSafeCaller;
+    underlying = _underlying;
+    weights.push(1e18);
+    (address adapter,) = IAdapterRegistry(_registry).getAdapterWithHighestAPR(_underlying);
+    _underlying.safeApproveMax(adapter);
+    address wrapper = IErc20Adapter(adapter).token();
+    wrapper.safeApproveMax(adapter);
+    lockedTokens[wrapper] = true;
+    adapters.push(IErc20Adapter(adapter));
+    feeRecipient = msg.sender;
+    name = string(abi.encodePacked(
+      "Indexed ",
+      SymbolHelper.getName(_underlying)
+    ));
+    symbol = string(abi.encodePacked(
+      "n",
+      SymbolHelper.getSymbol(_underlying)
+    ));
+    emit AdapterAdded(adapter, wrapper, 1e18);
+  }
+
+/* ========== Underlying Balance Queries ========== */
+
+  /**
+   * @dev Returns the value in `underlying` of the vault's deposits
+   * in each adapter.
+   */
   function getBalances() public view returns (uint256[] memory balances) {
     return _getBalances(adapters);
   }
 
   /**
-   * @dev 
+   * @dev Returns total value of vault in `underlying`
    */
   function balance() public view returns (uint256 sum) {
     uint256 len = adapters.length;
@@ -120,8 +172,9 @@ contract NirnVault is ERC20 {
     uint256[] memory proposedWeights
   ) external view returns (int256[] memory liquidityDeltas) {
     require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    (, uint256[] memory balances, uint256 totalAvailableBalance) = _getRebalanceParameters();
-    liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, balances, proposedWeights);
+    (,, uint256 totalAvailableBalance) = _getRebalanceParameters();
+    uint256[] memory balancesForProposed = _getBalances(proposedAdapters);
+    liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, balancesForProposed, proposedWeights);
   }
 
 /* ========== APR Queries ========== */
@@ -134,7 +187,7 @@ contract NirnVault is ERC20 {
     ) = _getRebalanceParameters();
     uint256[] memory _weights = weights;
     int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, _balances, _weights);
-    return APRNet.getNetAPR(_adapters, _weights, liquidityDeltas);
+    return APRNet.getNetAPR(_adapters, _weights, liquidityDeltas, reserveRatio);
   }
 
   function getHypotheticalAPR(uint256[] memory proposedWeights) external view returns (uint256) {
@@ -145,7 +198,7 @@ contract NirnVault is ERC20 {
     ) = _getRebalanceParameters();
     require(proposedWeights.length == _adapters.length, "bad lengths");
     int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, _balances, proposedWeights);
-    return APRNet.getNetAPR(_adapters, proposedWeights, liquidityDeltas);
+    return APRNet.getNetAPR(_adapters, proposedWeights, liquidityDeltas, reserveRatio);
   }
 
   function getHypotheticalAPR(
@@ -159,7 +212,7 @@ contract NirnVault is ERC20 {
        _getBalances(proposedAdapters),
       proposedWeights
     );
-    return APRNet.getNetAPR(proposedAdapters, proposedWeights, liquidityDeltas);
+    return APRNet.getNetAPR(proposedAdapters, proposedWeights, liquidityDeltas, reserveRatio);
   }
 
 /* ========== Fees ========== */
@@ -202,11 +255,11 @@ contract NirnVault is ERC20 {
     _mint(msg.sender, shares);
   }
 
-  function depositTo(uint256 amount, address to) external returns (uint256) {
+  function depositTo(uint256 amount, address to) external returns (uint256 shares) {
     uint256 bal = balance();
     underlying.safeTransferFrom(msg.sender, address(this), amount);
     uint256 supply = totalSupply;
-    uint256 shares = supply == 0 ? amount : (amount.mul(supply) / bal);
+    shares = supply == 0 ? amount : (amount.mul(supply) / bal);
     _mint(to, shares);
   }
 
@@ -263,10 +316,12 @@ contract NirnVault is ERC20 {
 /* ========== Rebalance Actions ========== */
 
   function rebalance() external onlyEOA {
-    IErc20Adapter[] memory _adapters = adapters;
-    uint256[] memory balances = _getBalances(_adapters);
-    uint256 totalBalance = APRNet.sum(balances).add(IERC20(underlying).balanceOf(address(this)));
-    int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalBalance, balances, weights);
+        (
+      IErc20Adapter[] memory _adapters,
+      uint256[] memory _balances,
+      uint256 totalAvailableBalance
+    ) = _getRebalanceParameters();
+    int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, _balances, weights);
     APRNet.rebalance(_adapters, liquidityDeltas);
   }
 
@@ -297,7 +352,7 @@ contract NirnVault is ERC20 {
     uint256[] memory balances = _getBalances(_adapters);
     uint256 totalBalance = APRNet.sum(balances).add(IERC20(underlying).balanceOf(address(this)));
     int256[] memory liquidityDeltasCurrent = APRNet.calculateLiquidityDeltas(totalBalance, balances, weights);
-    int256[] memory liquidityDeltasProposed = APRNet.calculateLiquidityDeltas(totalBalance, balances, proposedWeights);
+    int256[] memory liquidityDeltasProposed = APRNet.calculateLiquidityDeltas(totalBalance, _getBalances(proposedAdapters), proposedWeights);
     uint256 currentAPR = APRNet.getNetAPR(_adapters, weights, liquidityDeltasCurrent);
     uint256 suggestedAPR = APRNet.getNetAPR(proposedAdapters, proposedWeights, liquidityDeltasProposed);
     uint256 diff = suggestedAPR.sub(currentAPR, "!increased");
@@ -312,7 +367,9 @@ contract NirnVault is ERC20 {
     APRNet.rebalance(proposedAdapters, liquidityDeltasProposed);
   }
 
-  function _transferOut(address to, uint256 amount) internal {}
+  function _transferOut(address to, uint256 amount) internal {
+    underlying.safeTransfer(to, amount);
+  }
 
 /* ========== Internal Rebalance Logic ========== */
 

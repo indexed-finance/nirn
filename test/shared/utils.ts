@@ -3,7 +3,7 @@ import { JsonRpcSigner } from '@ethersproject/providers';
 import { keccak256 } from '@ethersproject/keccak256';
 import { BigNumber, Contract } from 'ethers';
 import { ethers, network, waffle } from 'hardhat';
-import { IERC20, IVault, IWETH, IYearnRegistry, TestFactory, IUniswapV2Pair, IERC20Metadata } from '../../typechain';
+import { IERC20, IVault, IWETH, IYearnRegistry, TestFactory, IUniswapV2Pair, IERC20Metadata, IProtocolAdapter } from '../../typechain';
 import { addProxy } from './proxyResolution';
 import { formatUnits, parseUnits } from '@ethersproject/units';
 
@@ -11,6 +11,15 @@ export const SUSHISWAP_FACTORY_ADDRESS = '0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4
 export const UNISWAP_FACTORY_ADDRESS = '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f';
 
 export const WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+
+export async function batchMap(adapter: IProtocolAdapter, batchSize: number) {
+  const unmapped = await adapter.getUnmapped();
+  let remaining = unmapped.length;
+  while (remaining > 0) {
+    await adapter.map(batchSize);
+    remaining -= batchSize;
+  }
+}
 
 export function getBigNumber(n: number, decimals = 18) {
   return BigNumber.from(10).pow(decimals).mul(n);
