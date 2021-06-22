@@ -4,10 +4,12 @@ pragma solidity ^0.7.6;
 import "../interfaces/ITokenAdapter.sol";
 import "../libraries/LowGasSafeMath.sol";
 import "../libraries/MinimalSignedMath.sol";
+import "../libraries/Fraction.sol";
 
 
 // Sort of like ARPANET but with different letters
 library APRNet {
+  using Fraction for uint256;
   using LowGasSafeMath for uint256;
   using MinimalSignedMath for uint256;
   using MinimalSignedMath for int256;
@@ -47,6 +49,16 @@ library APRNet {
         adapters[i].getHypotheticalAPR(liquidityDeltas[i]).mul(weights[i]) / uint256(1e18)
       );
     }
+  }
+
+  function getNetAPR(
+    IErc20Adapter[] memory adapters,
+    uint256[] memory weights,
+    int256[] memory liquidityDeltas,
+    uint256 reserveRatio
+  ) internal view returns (uint256 netAPR) {
+    netAPR = getNetAPR(adapters, weights, liquidityDeltas);
+    netAPR = netAPR.sub(netAPR.mulFractionE18(reserveRatio));
   }
 
   function calculateLiquidityDeltas(
