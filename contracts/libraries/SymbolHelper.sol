@@ -47,4 +47,16 @@ library SymbolHelper {
     assembly { mstore(data, size) }
     return string(data);
   }
+
+  function getName(address token) internal view returns (string memory) {
+    (bool success, bytes memory data) = token.staticcall(abi.encodeWithSignature("name()"));
+    if (!success) return "UNKNOWN";
+    if (data.length != 32) return abi.decode(data, (string));
+    uint256 symbol = abi.decode(data, (uint256));
+    if (symbol == 0) return "UNKNOWN";
+    uint256 emptyBits = 255 - lowestBitSet(symbol);
+    uint256 size = (emptyBits / 8) + (emptyBits % 8 > 0 ? 1 : 0);
+    assembly { mstore(data, size) }
+    return string(data);
+  }
 }
