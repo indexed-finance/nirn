@@ -2,21 +2,20 @@ import { formatEther } from "@ethersproject/units";
 import { expect } from "chai";
 import { BigNumber, constants } from "ethers";
 import { waffle } from "hardhat";
-import { AdapterRegistry, CErc20Adapter, CallForwarder, CrErc20Adapter, IERC20, IProtocolAdapter, NirnVault } from "../typechain"
+import { AdapterRegistry, TestAdapter, CallForwarder, IERC20, IProtocolAdapter, NirnVault, TestERC20, TestVault } from "../typechain"
 import { deployContract, getBigNumber, getContract, resetFork, sendEtherTo, sendTokenTo } from "./shared";
+import { deployTestAdaptersAndRegistry } from "./shared/fixtures";
 
 describe('NirnVault', () => {
   const [wallet] = waffle.provider.getWallets()
 
-  let underlying: IERC20
+  let underlying: TestERC20
   let registry: AdapterRegistry
   let vault: NirnVault
-  let compound: IProtocolAdapter
-  let cream: IProtocolAdapter
-  let adapter1: CErc20Adapter
-  let adapter2: CrErc20Adapter
-  let wrapper1: IERC20
-  let wrapper2: IERC20
+  let adapter1: TestAdapter
+  let adapter2: TestAdapter
+  let wrapper1: TestVault
+  let wrapper2: TestVault
 
   async function batchMap(adapter: IProtocolAdapter, batchSize: number) {
     const unmapped = await adapter.getUnmapped();
@@ -28,7 +27,7 @@ describe('NirnVault', () => {
   }
 
   const deposit = async (amount: BigNumber) => {
-    await sendTokenTo(underlying.address, wallet.address, amount)
+    await underlying.mint(wallet.address, amount)
     return vault.deposit(amount)
   }
 
@@ -36,20 +35,15 @@ describe('NirnVault', () => {
     before('Deploy vault and registry', async () => {
       await resetFork()
       await sendEtherTo(wallet.address);
-      registry = await deployContract('AdapterRegistry')
-      underlying = await getContract('0x6b175474e89094c44da98b954eedeac495271d0f', 'IERC20')
-      compound = await deployContract('CompoundProtocolAdapter', registry.address)
-      cream = await deployContract('CreamProtocolAdapter', registry.address)
-      await registry.addProtocolAdapter(compound.address)
-      await registry.addProtocolAdapter(cream.address)
-      await batchMap(compound, 4)
-      await batchMap(cream, 4)
+      ({
+        underlying,
+        adapter1,
+        adapter2,
+        wrapper1,
+        wrapper2,
+        registry
+      } = await deployTestAdaptersAndRegistry())
       vault = await deployContract('NirnVault', registry.address, constants.AddressZero, underlying.address)
-      const { adapters } = await registry.getAdaptersSortedByAPR(underlying.address)
-      adapter1 = await getContract(adapters[0], 'CErc20Adapter')
-      adapter2 = await getContract(adapters[1], 'CErc20Adapter')
-      wrapper1 = await getContract(await adapter1.token(), 'IERC20')
-      wrapper2 = await getContract(await adapter2.token(), 'IERC20')
       await underlying.approve(vault.address, constants.MaxUint256);
       if (withDeposit) {
         await deposit(getBigNumber(10))
@@ -97,11 +91,11 @@ describe('NirnVault', () => {
     })
 
     it('Should set name to Indexed {underlying.name()}', async () => {
-      expect(await vault.name()).to.eq('Indexed Dai Stablecoin')
+      expect(await vault.name()).to.eq('Indexed Test Token')
     })
 
     it('Should set symbol to n{underlying.symbol()}', async () => {
-      expect(await vault.symbol()).to.eq('nDAI')
+      expect(await vault.symbol()).to.eq('nTOK')
     })
   })
 
@@ -114,7 +108,7 @@ describe('NirnVault', () => {
       })
   
       it('Should mint 1 vault token per underlying on first deposit', async () => {
-        await sendTokenTo(underlying.address, wallet.address, getBigNumber(10))
+        await underlying.mint(wallet.address, getBigNumber(10))
         await underlying.approve(vault.address, constants.MaxUint256);
         await expect(vault.deposit(getBigNumber(10)))
           .to.emit(underlying, 'Transfer')
@@ -124,7 +118,7 @@ describe('NirnVault', () => {
       })
   
       it('Should mint vault tokens proportional to deposit', async () => {
-        await sendTokenTo(underlying.address, vault.address, getBigNumber(10))
+        await underlying.mint(vault.address, getBigNumber(10))
         await expect(await deposit(getBigNumber(10)))
           .to.emit(underlying, 'Transfer')
           .withArgs(wallet.address, vault.address, getBigNumber(10))
@@ -346,19 +340,25 @@ describe('NirnVault', () => {
         ).to.be.revertedWith('!increased')
       })
 
-      it('Should revert if new APR not 5% better', async () => {
+      /* it('Should revert if new APR not 5% better', async () => {
         // const depositAmount = await wrapper1.totalSupply()
         const aprNow1 = await adapter1.getAPR()
         const aprNow2 = await adapter2.getAPR()
-        const diffFractionE18 = aprNow1.sub(aprNow2).mul(getBigNumber(1)).div(aprNow2);
+        const diffFractionE18 = aprNow1.sub(aprNow2).mul(getBigNumber(1)).div(aprNow1);
         const totalValue = await adapter2.totalLiquidity()
+        console.log(`Apr diff ${formatEther(aprNow1.sub(aprNow2))}`)
+        console.log(`Apr 1 ${formatEther(aprNow1)}`)
+        console.log(`Apr 2 ${formatEther(aprNow2)}`)
+        console.log(`Apr delta ${formatEther(diffFractionE18)}`)
+        console.log(`Current liquidity ${formatEther(totalValue)}`)
         const increaseSupplyBy = totalValue.mul(diffFractionE18).div(getBigNumber(1))
+        console.log(`Should increase supply by ${formatEther(increaseSupplyBy)}`)
         await sendTokenTo(underlying.address, wallet.address, increaseSupplyBy)
         await underlying.approve(adapter1.address, increaseSupplyBy)
         await adapter1.deposit(increaseSupplyBy)
         console.log(`${formatEther((await adapter1.getAPR()).mul(100))}%`)
         console.log(`${formatEther((await adapter2.getAPR()).mul(100))}%`)
-      })
+      }) */
     })
   })
 })
