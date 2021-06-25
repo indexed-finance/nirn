@@ -42,19 +42,20 @@ contract NirnVault is ERC20, Ownable() {
 
 /* ========== Storage ========== */
 
+  /** @dev Account that receives performance fees. */
   address public feeRecipient;
+  /** @dev Fee taken on profit as a fraction of 1e18. */
+  uint256 public performanceFee = 5e16;
+  /** @dev Ratio of underlying token to keep in the vault for cheap withdrawals as a fraction of 1e18. */
+  uint256 public reserveRatio = 1e17;
   /** @dev Token adapters for the underlying token. */
   IErc20Adapter[] public adapters;
   /** @dev Weights for adapters at corresponding index as a fraction of 1e18 (sum must be 1e18). */
   uint256[] public weights;
-  /** @dev Ratio of underlying token to keep in the vault for cheap deposits as a fraction of 1e18. */
-  uint256 public reserveRatio = 1e17;
   /** @dev Tokens which can not be sold - wrapper tokens used by the adapters. */
   mapping(address => bool) public lockedTokens;
   /** @dev Last price at which fees were taken. */
   uint256 public priceAtLastFee = 1e18;
-  /** @dev Fee taken on profit as a fraction of 1e18. */
-  uint256 public performanceFee = 5e16;
 
   function getAdapters() external view returns (IErc20Adapter[] memory _adapters) {
     _adapters = adapters;
@@ -106,6 +107,17 @@ contract NirnVault is ERC20, Ownable() {
       SymbolHelper.getSymbol(_underlying)
     ));
     emit AdapterAdded(adapter, wrapper, 1e18);
+  }
+
+/* ========== Configuration Controls ========== */
+
+  function setPerformanceFee(uint256 _performanceFee) external onlyOwner {
+    require(_performanceFee <= 2e17, "fee >20%");
+    performanceFee = _performanceFee;
+  }
+
+  function setFeeRecipient(address _feeRecipient) external onlyOwner {
+    feeRecipient = _feeRecipient;
   }
 
 /* ========== Underlying Balance Queries ========== */
@@ -241,7 +253,7 @@ contract NirnVault is ERC20, Ownable() {
     uint256 profitPerShare = priceNow - lastPrice;
     uint256 totalProfit = supply.mulFractionE18(profitPerShare);
     uint256 profitFee = totalProfit.mulFractionE18(performanceFee);
-    lastPrice = bal.sub(profitFee).toFractionE18(supply);
+    priceAtLastFee = bal.sub(profitFee).toFractionE18(supply);
     _transferOut(feeRecipient, profitFee);
   }
 
