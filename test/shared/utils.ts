@@ -87,7 +87,8 @@ export async function getBalance(erc20: string, account: string): Promise<BigNum
 }
 
 const holders: Record<string, string> = {
-  '0xbA4cFE5741b357FA371b506e5db0774aBFeCf8Fc': '0xDBC13E67F678Cc00591920ceCe4dCa6322a79AC7'
+  '0xbA4cFE5741b357FA371b506e5db0774aBFeCf8Fc': '0xDBC13E67F678Cc00591920ceCe4dCa6322a79AC7',
+  '0x6B175474E89094C44Da98b954EedeAC495271d0F': '0x028171bCA77440897B824Ca71D1c56caC55b68A3'
 }
 
 export async function isPairToken(token: string) {
@@ -123,14 +124,14 @@ export async function sendTokenTo(erc20: string, to: string, amount: BigNumber) 
     })
   } else {
     const token = (await ethers.getContractAt('IERC20', erc20)) as IERC20;
-    let pair = computeUniswapPairAddress(erc20, WETH);
-    const code = await ethers.provider.getCode(pair)
-    if (code === '0x' || (await token.balanceOf(pair)).lt(amount)) {
-      pair = computeSushiswapPairAddress(erc20, WETH);
+    let sender = computeUniswapPairAddress(erc20, WETH);
+    const code = await ethers.provider.getCode(sender)
+    if (code === '0x' || (await token.balanceOf(sender)).lt(amount)) {
+      sender = computeSushiswapPairAddress(erc20, WETH);
     }
-    if ((await token.balanceOf(pair)).lt(amount)) {
+    if ((await token.balanceOf(sender)).lt(amount)) {
       if (holders[getAddress(erc20)]) {
-        pair = holders[getAddress(erc20)]
+        sender = holders[getAddress(erc20)]
       } else {
         if (await isPairToken(erc20)) {
           await sendPairTokens(erc20, to, amount);
@@ -139,8 +140,8 @@ export async function sendTokenTo(erc20: string, to: string, amount: BigNumber) 
         throw new Error('Could not find holder to transfer tokens from');
       }
     }
-    await sendEtherTo(pair);
-    await withSigner(pair, async (signer) => {
+    await sendEtherTo(sender);
+    await withSigner(sender, async (signer) => {
       await token.connect(signer).transfer(to, amount);
     });
   }
