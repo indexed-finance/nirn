@@ -46,15 +46,15 @@ abstract contract AbstractErc20Adapter {
     ));
   }
 
+  function totalLiquidity() external view virtual returns (uint256);
+
+  function availableLiquidity() external view virtual returns (uint256);
+
 /* ========== Conversion Queries ========== */
 
-  function toUnderlyingAmount(uint256 tokenAmount) public view virtual returns (uint256) {
-    return tokenAmount;
-  }
+  function toUnderlyingAmount(uint256 tokenAmount) external view virtual returns (uint256);
 
-  function toWrappedAmount(uint256 underlyingAmount) public view virtual returns (uint256) {
-    return underlyingAmount;
-  }
+  function toWrappedAmount(uint256 underlyingAmount) external view virtual returns (uint256);
 
 /* ========== Performance Queries ========== */
 

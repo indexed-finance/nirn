@@ -69,6 +69,16 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
     ));
   }
 
+/* ========== Metadata ========== */
+
+  function totalLiquidity() external view override returns (uint256) {
+    return IERC20(token).totalSupply();
+  }
+
+  function availableLiquidity() external view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
 /* ========== Conversion Queries ========== */
 
   function toUnderlyingAmount(uint256 tokenAmount) public pure override returns (uint256) {
@@ -119,18 +129,18 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     address reserve = underlying;
     ILendingPool.ReserveData memory data = pool.getReserveData(reserve);
-    uint256 availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).add(liquidityDelta);
+    uint256 _availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).add(liquidityDelta);
     uint256 totalVariableDebt = data.variableDebtToken.scaledTotalSupply().rayMul(data.variableBorrowIndex);
     (uint256 totalStableDebt, uint256 avgStableRate) = data.stableDebtToken.getTotalSupplyAndAvgRate();
     (uint256 liquidityRate, ,) = data.interestRateStrategy.calculateInterestRates(
       reserve,
-      availableLiquidity,
+      _availableLiquidity,
       totalStableDebt,
       totalVariableDebt,
       avgStableRate,
       ReserveConfigurationLib.getReserveFactor(data.configuration)
     );
-    uint256 newLiquidity = availableLiquidity.add(totalVariableDebt).add(totalStableDebt);
+    uint256 newLiquidity = _availableLiquidity.add(totalVariableDebt).add(totalStableDebt);
     return (liquidityRate / 1e9).add(getRewardsAPR(newLiquidity));
   }
 

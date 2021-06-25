@@ -38,6 +38,17 @@ contract FuseEtherAdapter is AbstractEtherAdapter() {
     return __protocolName;
   }
 
+/* ========== Metadata ========== */
+
+  function totalLiquidity() public view override returns (uint256) {
+    IFToken cToken = IFToken(token);
+    return cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
+  }
+
+  function availableLiquidity() public view override returns (uint256) {
+    return address(token).balance;
+  }
+
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256) {

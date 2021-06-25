@@ -37,7 +37,7 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
     underlying.safeApproveMax(address(dydx));
   }
 
-/* ========== Metadata Queries ========== */
+/* ========== Metadata ========== */
 
   function name() external view virtual override returns (string memory) {
     return string(abi.encodePacked(
@@ -50,6 +50,14 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
   function balance() public view returns (uint256) {
     Wei memory bal = dydx.getAccountWei(Info(address(this), 0), marketId);
     return bal.value;
+  }
+
+  function totalLiquidity() public view override returns (uint256) {
+    return dydx.getMarketTotalPar(marketId).supply;
+  }
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(address(dydx));
   }
 
 /* ========== Conversion Queries ========== */

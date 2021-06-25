@@ -22,6 +22,32 @@ contract CrEtherAdapter is AbstractEtherAdapter() {
     return "Cream";
   }
 
+/* ========== Metadata ========== */
+
+  function totalLiquidity() public view override returns (uint256) {
+    ICToken cToken = ICToken(token);
+    return cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
+  }
+
+  function availableLiquidity() public view override returns (uint256) {
+    return address(token).balance;
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return (
+      tokenAmount.mul(CTokenParams.currentExchangeRate(token))
+      / (10 ** (10 + IERC20Metadata(underlying).decimals()))
+    );
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
+    return underlyingAmount
+      .mul(10 ** (10 + IERC20Metadata(underlying).decimals()))
+      .divCeil(CTokenParams.currentExchangeRate(token));
+  }
+
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256) {

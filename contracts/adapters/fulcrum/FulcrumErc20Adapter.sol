@@ -18,6 +18,10 @@ contract FulcrumErc20Adapter is IErc20Adapter {
   using TransferHelper for address;
   using SymbolHelper for address;
 
+/* ========== Constants ========== */
+
+  IBZX public constant bzx = IBZX(0xD8Ee69652E4e4838f2531732a46d1f7F584F0b7f);
+
 /* ========== Storage ========== */
 
   address public override underlying;
@@ -39,7 +43,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     _underlying.safeApproveMax(token);
   }
 
-/* ========== Metadata Queries ========== */
+/* ========== Metadata ========== */
 
   function name() external view override returns (string memory) {
     return string(abi.encodePacked(
@@ -47,6 +51,14 @@ contract FulcrumErc20Adapter is IErc20Adapter {
       underlying.getSymbol(),
       " Adapter"
     ));
+  }
+
+  function totalLiquidity() public view override returns (uint256) {
+    return toUnderlyingAmount(IERC20(token).totalSupply());
+  }
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(address(bzx));
   }
 
 /* ========== Conversion Queries ========== */

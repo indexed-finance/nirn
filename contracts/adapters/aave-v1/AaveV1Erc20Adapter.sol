@@ -18,23 +18,51 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 
 /* ========== Constants ========== */
 
-  ILendingPoolAddressesProvider public immutable aave;
+  // ILendingPoolAddressesProvider public immutable aave;
+  ILendingPool public immutable pool;
+  ILendingPoolCore public immutable core;
 
 /* ========== Constructor ========== */
 
   constructor(ILendingPoolAddressesProvider _aave) AbstractErc20Adapter() {
-    aave = _aave;
+    pool = _aave.getLendingPool();
+    core = _aave.getLendingPoolCore();
+  }
+
+/* ========== Internal Queries ========== */
+
+  function _protocolName() internal view virtual override returns (string memory) {
+    return "Aave V1";
+  }
+
+/* ========== Metadata ========== */
+
+  function totalLiquidity() external view returns (uint256) {
+    return IERC20(token).totalSupply();
+  }
+
+  function availableLiquidity() external view returns (uint256) {
+    return IERC20(underlying).balanceOf(address(core));
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) external view virtual override returns (uint256) {
+    return tokenAmount;
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) external view virtual override returns (uint256) {
+    return underlyingAmount;
   }
 
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256 apr) {
-    apr = aave.getLendingPoolCore().getReserveCurrentLiquidityRate(underlying) / 1e9;
+    apr = core.getReserveCurrentLiquidityRate(underlying) / 1e9;
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     address reserve = underlying;
-    ILendingPoolCore core = aave.getLendingPoolCore();
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(reserve).calculateInterestRates(
       reserve,
       core.getReserveAvailableLiquidity(reserve).add(liquidityDelta),
@@ -51,21 +79,15 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
     return IERC20(token).balanceOf(msg.sender);
   }
 
-/* ========== Internal Queries ========== */
-
-  function _protocolName() internal view virtual override returns (string memory) {
-    return "Aave V1";
-  }
-
 /* ========== Internal Actions ========== */
 
   function _approve() internal virtual override {
-    underlying.safeApproveMax(address(aave.getLendingPoolCore()));
+    underlying.safeApproveMax(address(core));
   }
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
     amountMinted = amountUnderlying;
-    aave.getLendingPool().deposit(underlying, amountUnderlying, 0);
+    pool.deposit(underlying, amountUnderlying, 0);
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {

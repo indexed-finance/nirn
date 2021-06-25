@@ -22,6 +22,17 @@ contract CrErc20Adapter is AbstractErc20Adapter() {
     return "Cream";
   }
 
+/* ========== Metadata ========== */
+
+  function totalLiquidity() public view override returns (uint256) {
+    ICToken cToken = ICToken(token);
+    return cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
+  }
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
 /* ========== Conversion Queries ========== */
 
   function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
@@ -39,11 +50,6 @@ contract CrErc20Adapter is AbstractErc20Adapter() {
   }
 
 /* ========== Performance Queries ========== */
-
-  function totalLiquidity() public view returns (uint256) {
-    ICToken cToken = ICToken(token);
-    return cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
-  }
 
   function getAPR() external view virtual override returns (uint256) {
     return ICToken(token).supplyRatePerBlock().mul(2102400);
