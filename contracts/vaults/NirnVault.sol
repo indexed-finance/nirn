@@ -241,7 +241,7 @@ contract NirnVault is ERC20, Ownable() {
     uint256 profitPerShare = priceNow - lastPrice;
     uint256 totalProfit = supply.mulFractionE18(profitPerShare);
     uint256 profitFee = totalProfit.mulFractionE18(performanceFee);
-    lastPrice = bal.sub(profitFee).toFractionE18(supply);
+    priceAtLastFee = bal.sub(profitFee).toFractionE18(supply);
     _transferOut(feeRecipient, profitFee);
   }
 
