@@ -2,14 +2,21 @@
 pragma solidity >=0.5.0;
 
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
+import "../libraries/LowGasSafeMath.sol";
 
 
 library ArrayHelper {
   using EnumerableSet for EnumerableSet.AddressSet;
+  using LowGasSafeMath for uint256;
 
   function toArray(EnumerableSet.AddressSet storage set) internal view returns (address[] memory arr) {
     bytes32[] memory bytes32Arr = set._inner._values;
     assembly { arr := bytes32Arr }
+  }
+
+  function sum(uint256[] memory arr) internal pure returns (uint256 _sum) {
+    uint256 len = arr.length;
+    for (uint256 i; i < len; i++) _sum = _sum.add(arr[i]);
   }
 
   /**
