@@ -11,8 +11,6 @@ interface IErc20Adapter {
 
   function name() external view returns (string memory);
 
-  function totalLiquidity() external view returns (uint256);
-
   function availableLiquidity() external view returns (uint256);
 
 /* ========== Conversion ========== */
@@ -42,6 +40,8 @@ interface IErc20Adapter {
   function withdrawAll() external returns (uint256 amountReceived);
 
   function withdrawUnderlying(uint256 amountUnderlying) external returns (uint256 amountBurned);
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external returns (uint256 amountReceived);
 }
 
 interface IEtherAdapter is IErc20Adapter {
