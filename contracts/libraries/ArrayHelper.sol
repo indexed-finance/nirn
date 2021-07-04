@@ -19,6 +19,40 @@ library ArrayHelper {
     for (uint256 i; i < len; i++) _sum = _sum.add(arr[i]);
   }
 
+  function mremove(uint256[] memory arr, uint256 index) internal pure {
+    uint256 len = arr.length;
+    if (index != len - 1) {
+      uint256 last = arr[len - 1];
+      arr[index] = last;
+    }
+    assembly { mstore(arr, sub(len, 1)) }
+  }
+
+  function mremove(address[] memory arr, uint256 index) internal pure {
+    uint256 len = arr.length;
+    if (index != len - 1) {
+      address last = arr[len - 1];
+      arr[index] = last;
+    }
+    assembly { mstore(arr, sub(len, 1)) }
+  }
+
+  /**
+   * @dev Remove the element at `index` from an array and decrement its length.
+   * If `index` is the last index in the array, pops it from the array.
+   * Otherwise, stores the last element in the array at `index` and then pops the last element.
+   */
+  function remove(bytes32[] storage arr, uint256 index) internal {
+    uint256 len = arr.length;
+    if (index == len - 1) {
+      arr.pop();
+      return;
+    }
+    bytes32 last = arr[len - 1];
+    arr[index] = last;
+    arr.pop();
+  }
+
   /**
    * @dev Remove the element at `index` from an array and decrement its length.
    * If `index` is the last index in the array, pops it from the array.
