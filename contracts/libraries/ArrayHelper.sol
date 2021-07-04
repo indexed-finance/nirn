@@ -3,6 +3,7 @@ pragma solidity >=0.5.0;
 
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "../libraries/LowGasSafeMath.sol";
+import "../interfaces/ITokenAdapter.sol";
 
 
 library ArrayHelper {
@@ -32,6 +33,15 @@ library ArrayHelper {
     uint256 len = arr.length;
     if (index != len - 1) {
       address last = arr[len - 1];
+      arr[index] = last;
+    }
+    assembly { mstore(arr, sub(len, 1)) }
+  }
+
+  function mremove(IErc20Adapter[] memory arr, uint256 index) internal pure {
+    uint256 len = arr.length;
+    if (index != len - 1) {
+      IErc20Adapter last = arr[len - 1];
       arr[index] = last;
     }
     assembly { mstore(arr, sub(len, 1)) }
