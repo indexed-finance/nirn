@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { constants } from "ethers";
-import { TestDynamicArrays } from "../typechain"
-import { deployContract } from "./shared";
+import { TestDynamicArrays } from "../../typechain"
+import { deployContract } from "../shared";
 
 describe('DynamicArrays', () => {
   let test: TestDynamicArrays;
