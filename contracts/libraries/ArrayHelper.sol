@@ -38,26 +38,25 @@ library ArrayHelper {
     revert("Element not found in array");
   }
 
-
   /**
    * @dev Given an array of tokens and scores, sort by scores in descending order.
    */
   function sortByDescendingScore(
-    address[] memory tokens,
+    address[] memory addresses,
     uint256[] memory scores
   ) internal pure {
-    uint256 len = tokens.length;
+    uint256 len = addresses.length;
     for (uint256 i = 0; i < len; i++) {
       uint256 score = scores[i];
-      address token = tokens[i];
+      address _address = addresses[i];
       uint256 j = i - 1;
       while (int(j) >= 0 && scores[j] < score) {
         scores[j + 1] = scores[j];
-        tokens[j + 1] = tokens[j];
+        addresses[j + 1] = addresses[j];
         j--;
       }
       scores[j + 1] = score;
-      tokens[j + 1] = token;
+      addresses[j + 1] = _address;
     }
   }
 }
