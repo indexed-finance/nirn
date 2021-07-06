@@ -86,7 +86,7 @@ library ArrayHelper {
   function indexOf(address[] memory arr, address find) internal pure returns (uint256) {
     uint256 len = arr.length;
     for (uint256 i; i < len; i++) if (arr[i] == find) return i;
-    revert("Element not found in array");
+    revert("element not found");
   }
 
   /**
