@@ -10,7 +10,7 @@ pragma solidity >=0.5.0;
  * beforehand.
  *
  * This applies primarily to situations where a subset is taken from an existing array
- * through some filtering process, then used later.
+ * by some filtering process.
  *
  * This library should not be used to bypass Solidity's lack of dynamic memory array
  * support in any situation where the code could potentially cause the array to exceed
