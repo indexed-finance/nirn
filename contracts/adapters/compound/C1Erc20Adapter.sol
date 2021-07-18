@@ -29,11 +29,6 @@ contract C1Erc20Adapter is AbstractErc20Adapter() {
 
 /* ========== Metadata ========== */
 
-  function totalLiquidity() public view override returns (uint256) {
-    ICToken cToken = ICToken(token);
-    return cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
-  }
-
   function availableLiquidity() public view override returns (uint256) {
     return IERC20(underlying).balanceOf(token);
   }
