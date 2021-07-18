@@ -3,6 +3,7 @@ pragma solidity =0.7.6;
 
 import "../interfaces/CompoundInterfaces.sol";
 import "../interfaces/IAdapterRegistry.sol";
+import "../adapters/compound/C1Erc20Adapter.sol";
 import "../adapters/compound/CErc20Adapter.sol";
 import "../adapters/compound/CEtherAdapter.sol";
 import "../libraries/CloneLibrary.sol";
@@ -10,9 +11,11 @@ import "../libraries/CloneLibrary.sol";
 
 // @todo Add freezing & unfreezing of adapters and tokens
 contract CompoundProtocolAdapter {
+  address public constant interestRateModelV1 = 0xBAE04CbF96391086dC643e842b517734E214D698;
   address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
   IComptroller public constant comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
   IAdapterRegistry public immutable registry;
+  address public immutable erc20AdapterImplementationV1;
   address public immutable erc20AdapterImplementation;
   address public immutable etherAdapterImplementation;
 
@@ -23,6 +26,7 @@ contract CompoundProtocolAdapter {
 
   constructor(IAdapterRegistry _registry) {
     registry = _registry;
+    erc20AdapterImplementationV1 = address(new C1Erc20Adapter());
     erc20AdapterImplementation = address(new CErc20Adapter());
     etherAdapterImplementation = address(new CEtherAdapter());
   }
@@ -92,6 +96,8 @@ contract CompoundProtocolAdapter {
     }
     if (underlying == weth) {
       adapter = CloneLibrary.createClone(etherAdapterImplementation);
+    } else if (address(cToken.interestRateModel()) == interestRateModelV1) {
+      adapter = CloneLibrary.createClone(erc20AdapterImplementationV1);
     } else {
       adapter = CloneLibrary.createClone(erc20AdapterImplementation);
     }
