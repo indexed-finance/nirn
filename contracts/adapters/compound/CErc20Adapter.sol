@@ -29,11 +29,6 @@ contract CErc20Adapter is AbstractErc20Adapter() {
 
 /* ========== Metadata ========== */
 
-  function totalLiquidity() public view override returns (uint256) {
-    ICToken cToken = ICToken(token);
-    return cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
-  }
-
   function availableLiquidity() public view override returns (uint256) {
     return IERC20(underlying).balanceOf(token);
   }
@@ -69,7 +64,9 @@ contract CErc20Adapter is AbstractErc20Adapter() {
   }
 
   function getRewardsAPR() public view returns (uint256) {
-    return getRewardsAPR(ICToken(token), totalLiquidity());
+    ICToken cToken = ICToken(token);
+    uint256 totalLiquidity = cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
+    return getRewardsAPR(ICToken(token), totalLiquidity);
   }
 
   function getAPR() external view virtual override returns (uint256) {
@@ -118,6 +115,14 @@ contract CErc20Adapter is AbstractErc20Adapter() {
 
 /* ========== Internal Actions ========== */
 
+  function _claimRewardsIfAny(address account) internal {
+    address[] memory holders = new address[](1);
+    address[] memory cTokens = new address[](1);
+    holders[0] = account;
+    cTokens[0] = token;
+    comptroller.claimComp(holders, cTokens, false, true);
+  }
+
   function _approve() internal virtual override {
     underlying.safeApproveMax(token);
   }
@@ -131,11 +136,13 @@ contract CErc20Adapter is AbstractErc20Adapter() {
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
     require(ICToken(token).redeem(amountToken) == 0, "CErc20: Burn failed");
     amountReceived = IERC20(underlying).balanceOf(address(this));
+    _claimRewardsIfAny(msg.sender);
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
     amountBurned = toWrappedAmount(amountUnderlying);
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CErc20: Burn failed");
+    _claimRewardsIfAny(msg.sender);
   }
 }
