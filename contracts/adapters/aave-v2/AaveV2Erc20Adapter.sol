@@ -71,11 +71,7 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
 
 /* ========== Metadata ========== */
 
-  function totalLiquidity() external view override returns (uint256) {
-    return IERC20(token).totalSupply();
-  }
-
-  function availableLiquidity() external view override returns (uint256) {
+  function availableLiquidity() public view override returns (uint256) {
     return IERC20(underlying).balanceOf(token);
   }
 
@@ -147,11 +143,13 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
 /* ========== Caller Balance Queries ========== */
 
   function balanceWrapped() public view virtual override returns (uint256) {
-    return IERC20(token).balanceOf(userModules[msg.sender]);
+    address module = userModules[msg.sender];
+    return IERC20(token).balanceOf(module == address(0) ? msg.sender : module);
   }
 
   function balanceUnderlying() external view virtual override returns (uint256) {
-    return IERC20(token).balanceOf(userModules[msg.sender]);
+    address module = userModules[msg.sender];
+    return IERC20(token).balanceOf(module == address(0) ? msg.sender : module);
   }
 
 /* ========== Token Actions ========== */
@@ -173,7 +171,7 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
       return amountToken;
     }
     AaveV2UserModule(payable(module)).withdraw(amountToken, true);
-    return amountToken;
+    amountReceived = amountToken;
   }
 
   function withdrawAll() external virtual override returns (uint256 amountReceived) {
@@ -181,7 +179,14 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
-    withdraw(amountUnderlying);
+    amountBurned = withdraw(amountUnderlying);
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
+    require(amountUnderlying > 0, "withdraw 0");
+    uint256 amountAvailable = availableLiquidity();
+    amountReceived = amountAvailable < amountUnderlying ? amountAvailable : amountUnderlying;
+    withdraw(amountReceived);
   }
 }
 
