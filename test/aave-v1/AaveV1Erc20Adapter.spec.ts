@@ -1,32 +1,19 @@
 import { getAddress } from "@ethersproject/address"
-import { waffle } from "hardhat"
-import { AaveV1Erc20Adapter, IERC20 } from "../../typechain"
-import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
-import { deployContract, AaveConverter } from '../shared'
+import { AaveV1Erc20Adapter } from "../../typechain"
+import { shouldBehaveLikeAdapter } from "../Erc20AdapterBehavior.spec"
+import { deployContract, AaveV1Converter } from '../shared'
 
 
 describe('AaveV1Erc20Adapter', () => {
-  const [wallet, wallet1] = waffle.provider.getWallets();
-  let implementation: AaveV1Erc20Adapter;
-  let adapter: AaveV1Erc20Adapter;
-  let token: IERC20;
-  let aToken: IERC20;
-
-  before('Deploy implementation', async () => {
-    implementation = await deployContract('AaveV1Erc20Adapter', '0x24a42fD28C976A61Df5D00D0599C34c4f90748c8');
+  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`a${symbol}`, function () {
+    shouldBehaveLikeAdapter(
+      async () => (await deployContract('AaveV1Erc20Adapter', '0x24a42fD28C976A61Df5D00D0599C34c4f90748c8')) as AaveV1Erc20Adapter,
+      async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
+      AaveV1Converter,
+      _underlying,
+      _ctoken
+    )
   })
-
-  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => behavesLikeErc20Adapter(
-    () => implementation,
-    async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
-    async (adapter, underlying, token) => underlying.balanceOf('0x3dfd23a6c5e8bbcfc9581d2e864a68feb6a076d3'),
-    AaveConverter,
-    _underlying,
-    _ctoken,
-    'Aave V1',
-    'a',
-    symbol
-  );
 
   testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0xfc1e690f61efd961294b3e1ce3313fbd8aa4f85d'), 'DAI');
   testAdapter(getAddress('0x0000000000085d4780b73119b644ae5ecd22b376'), getAddress('0x4da9b813057d04baef4e5800e36083717b4a0341'), 'TUSD');
