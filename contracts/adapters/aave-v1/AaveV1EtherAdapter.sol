@@ -41,11 +41,7 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
 /* ========== Metadata ========== */
 
-  function totalLiquidity() external view returns (uint256) {
-    return IERC20(token).totalSupply();
-  }
-
-  function availableLiquidity() external view returns (uint256) {
+  function availableLiquidity() public view override returns (uint256) {
     return address(core).balance;
   }
 

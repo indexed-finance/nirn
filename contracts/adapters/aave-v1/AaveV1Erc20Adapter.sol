@@ -37,11 +37,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 
 /* ========== Metadata ========== */
 
-  function totalLiquidity() external view returns (uint256) {
-    return IERC20(token).totalSupply();
-  }
-
-  function availableLiquidity() external view returns (uint256) {
+  function availableLiquidity() public view override returns (uint256) {
     return IERC20(underlying).balanceOf(address(core));
   }
 
