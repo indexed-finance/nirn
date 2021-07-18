@@ -4,6 +4,7 @@ pragma abicoder v2;
 
 
 interface ICToken {
+  function comptroller() external view returns (address);
   function underlying() external view returns (address);
   function name() external view returns (string memory);
   function totalSupply() external view returns (uint256);
@@ -19,14 +20,16 @@ interface ICToken {
   function exchangeRateStored() external view returns (uint256);
   function accrualBlockNumber() external view returns (uint256);
   function borrowBalanceStored(address account) external view returns (uint);
-
   function interestRateModel() external view returns (IInterestRateModel);
+
   function balanceOf(address account) external view returns (uint256);
   function balanceOfUnderlying(address owner) external returns (uint);
+
   function mint(uint256 mintAmount) external returns (uint256);
   function mint() external payable;
   function redeem(uint256 tokenAmount) external returns (uint256);
   function redeemUnderlying(uint256 underlyingAmount) external returns (uint256);
+  function borrow(uint borrowAmount) external returns (uint);
 }
 
 
@@ -51,6 +54,14 @@ interface IComptroller {
   function mintGuardianPaused(address cToken) external view returns (bool);
   function compSpeeds(address cToken) external view returns (uint256);
   function oracle() external view returns (IPriceOracle);
+  function compAccrued(address) external view returns (uint);
+  function markets(address cToken) external view returns (
+    bool isListed,
+    uint collateralFactorMantissa,
+    bool isComped
+  );
+  function claimComp(address[] memory holders, address[] memory cTokens, bool borrowers, bool suppliers) external;
+  function refreshCompSpeeds() external;
 }
 
 
