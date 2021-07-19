@@ -22,6 +22,12 @@ contract CyErc20Adapter is AbstractErc20Adapter() {
     return "IronBank";
   }
 
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
 /* ========== Conversion Queries ========== */
 
   function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
