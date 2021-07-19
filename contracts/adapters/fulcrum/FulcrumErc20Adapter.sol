@@ -20,7 +20,8 @@ contract FulcrumErc20Adapter is IErc20Adapter {
 
 /* ========== Constants ========== */
 
-  IBZX public constant bzx = IBZX(0xD8Ee69652E4e4838f2531732a46d1f7F584F0b7f);
+  IBZX internal constant bzx = IBZX(0xD8Ee69652E4e4838f2531732a46d1f7F584F0b7f);
+  uint256 internal constant weiPercentPrecision = 1e20;
 
 /* ========== Storage ========== */
 
@@ -53,12 +54,16 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     ));
   }
 
-  function totalLiquidity() public view override returns (uint256) {
-    return toUnderlyingAmount(IERC20(token).totalSupply());
-  }
-
   function availableLiquidity() public view override returns (uint256) {
-    return IERC20(underlying).balanceOf(address(bzx));
+    (,,,uint256 interestUnPaid, uint256 interestFeePercent,) = bzx.getLenderInterestData(
+      token,
+      underlying
+    );
+
+    interestUnPaid = interestUnPaid
+      .mul(weiPercentPrecision.sub(interestFeePercent))
+      / weiPercentPrecision;
+    return IERC20(underlying).balanceOf(token).add(interestUnPaid);
   }
 
 /* ========== Conversion Queries ========== */
@@ -119,6 +124,14 @@ contract FulcrumErc20Adapter is IErc20Adapter {
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
     amountBurned = amountUnderlying.mul(1e18).divCeil(IToken(token).tokenPrice());
+    token.safeTransferFrom(msg.sender, address(this), amountBurned);
+    require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
+    uint256 amountAvailable = availableLiquidity();
+    amountReceived = amountAvailable < amountUnderlying ? amountAvailable : amountUnderlying;
+    uint256 amountBurned = amountReceived.mul(1e18) / IToken(token).tokenPrice();
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
   }
