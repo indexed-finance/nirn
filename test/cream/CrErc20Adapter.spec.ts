@@ -1,27 +1,20 @@
 import { getAddress } from "@ethersproject/address"
 import { CrErc20Adapter } from "../../typechain"
-import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
+import { shouldBehaveLikeAdapter } from "../Erc20AdapterBehavior.spec"
 import { deployContract, CreamConverter } from '../shared'
 
 
 describe('CrErc20Adapter', () => {
-  let implementation: CrErc20Adapter;
-
-  before('Deploy implementation', async () => {
-    implementation = await deployContract('CrErc20Adapter');
+  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`cr${symbol}`, function () {
+    shouldBehaveLikeAdapter(
+      async () => (await deployContract('CrErc20Adapter')) as CrErc20Adapter,
+      async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
+      CreamConverter,
+      _underlying,
+      _ctoken,
+      symbol,
+    )
   })
-
-  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => behavesLikeErc20Adapter(
-    () => implementation,
-    async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
-    async (adapter, underlying, token) => underlying.balanceOf(token.address),
-    CreamConverter,
-    _underlying,
-    _ctoken,
-    'Cream',
-    'cr',
-    symbol
-  );
 
   // Working
   testAdapter(getAddress('0xa47c8bf37f92abed4a126bda807a7b7498661acd'), getAddress('0x51f48b638f82e8765f7a26373a2cb4ccb10c07af'), 'UST');
