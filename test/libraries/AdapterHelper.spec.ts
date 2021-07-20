@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { BigNumber, constants } from "ethers";
 import { waffle } from "hardhat";
 import { TestAdapter, TestAdapterHelper, TestERC20, TestVault } from "../../typechain"
-import { deployContract, getBigNumber, packAdapterAndWeight, sendTokenToFrom } from "../shared";
+import { deployContract, getBigNumber, packAdapterAndWeight } from "../shared";
 import { deployTestERC20, deployTestWrapperAndAdapter } from "../shared/fixtures";
 
 const padZero = (hex: string, bits: number) => hex.padStart(bits/4, '0');
