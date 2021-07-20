@@ -1,3 +1,6 @@
 export * from './time'
 export * from './utils'
 export * from './conversion'
+export * from './coder'
+export * from './tokens'
+export * from './fixtures'

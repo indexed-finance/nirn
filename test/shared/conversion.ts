@@ -1,6 +1,6 @@
 import { BigNumber } from "ethers";
 import { ICToken, IERC20, IToken } from "../../typechain";
-import { getBigNumber, getContract, getIERC20 } from "./utils";
+import { getBigNumber, getContract } from "./utils";
 
 export interface ConvertHelper {
   liquidityHolder(token: IERC20): Promise<string>;
