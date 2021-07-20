@@ -142,6 +142,13 @@ contract AdapterRegistry is Ownable() {
     name = IProtocolAdapter(protocolAdapter).protocol();
   }
 
+  function getProtocolForTokenAdapter(address adapter) external view returns (address protocolAdapter) {
+    address wrapper = IErc20Adapter(adapter).token();
+    TokenAdapter memory adapterRecord = adaptersByWrapperToken[wrapper];
+    require(adapterRecord.adapter == adapter, "!approved");
+    protocolAdapter = protocolAdapters[adapterRecord.protocolId];
+  }
+
 /* ========== Supported Token Queries ========== */
 
   function isSupported(address underlying) external view returns (bool) {
