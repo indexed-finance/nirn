@@ -166,7 +166,6 @@ describe('AaveV2Erc20Adapter', function () {
 
       it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
         if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
-          // await this.adapter.deposit(this.amountDeposited.div(2));
           await advanceTimeAndBlock(60)
           expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.be.gt(0);
           expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
