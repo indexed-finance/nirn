@@ -85,7 +85,8 @@ contract CreamProtocolAdapter is AbstractProtocolAdapter {
     try ICToken(cToken).sushi() returns (address) {
       return true;
     } catch {
-      return false;
+      // Return true is supply is 0.
+      return IERC20(cToken).totalSupply() == 0;
     }
   }
 }

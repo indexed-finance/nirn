@@ -84,6 +84,9 @@ contract CompoundProtocolAdapter is AbstractProtocolAdapter {
   }
 
   function isTokenMarketFrozen(address cToken) internal view virtual override returns (bool) {
-    return comptroller.mintGuardianPaused(cToken);
+    if (comptroller.mintGuardianPaused(cToken)) {
+      return true;
+    }
+    return IERC20(cToken).totalSupply() == 0;
   }
 }

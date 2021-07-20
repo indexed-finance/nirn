@@ -74,10 +74,13 @@ contract IronBankProtocolAdapter is AbstractProtocolAdapter {
 /* ========== Internal Queries ========== */
 
   function isAdapterMarketFrozen(address adapter) internal view virtual override returns (bool) {
-    return comptroller.mintGuardianPaused(IErc20Adapter(adapter).token());
+    return isTokenMarketFrozen(IErc20Adapter(adapter).token());
   }
 
   function isTokenMarketFrozen(address cToken) internal view virtual override returns (bool) {
-    return comptroller.mintGuardianPaused(cToken);
+    if (comptroller.mintGuardianPaused(cToken)) {
+      return true;
+    }
+    return IERC20(cToken).totalSupply() == 0;
   }
 }
