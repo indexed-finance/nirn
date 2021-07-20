@@ -46,7 +46,11 @@ export const setupAdapterContext = (
     this.toWrapped = (amount: BigNumber, withdrawUnderlying?: boolean) => this.converter.toWrapped(this.wrapper, amount, withdrawUnderlying)
     this.getTokenAmount = (n) => getBigNumber(n, this.decimals)
     this.getTokens = async (n: number) => {
-      const tokenAmount = await this.getTokenAmount(n)
+      let tokenAmount = await this.getTokenAmount(n)
+      const supply = await this.underlying.totalSupply();
+      if (supply.lt(tokenAmount)) {
+        tokenAmount = supply.div(100);
+      }
       await sendTokenTo(_underlying, this.wallet.address, tokenAmount)
       return tokenAmount
     }
