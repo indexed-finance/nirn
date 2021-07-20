@@ -13,6 +13,8 @@ contract TestAdapter {
   address public immutable underlying;
   address public immutable token;
   uint256 internal annualInterest;
+  bool internal restrictedLiquidity;
+  uint256 internal _availableLiquidity;
 
   constructor(address _underlying, uint256 _annualInterest) {
     underlying = _underlying;
@@ -20,6 +22,16 @@ contract TestAdapter {
     token = _token;
     annualInterest = _annualInterest;
     _underlying.safeApproveMax(_token);
+  }
+
+  function availableLiquidity() public view returns (uint256) {
+    if (restrictedLiquidity) return _availableLiquidity;
+    return IERC20(underlying).balanceOf(token);
+  }
+
+  function setAvailableLiquidity(uint256 amount) external {
+    restrictedLiquidity = true;
+    _availableLiquidity = amount;
   }
 
   function toWrappedAmount(uint256 underlyingAmount) public view returns (uint256) {
@@ -72,7 +84,7 @@ contract TestAdapter {
     return withdraw(balanceWrapped());
   }
 
-  function withdrawUnderlying(uint256 amountUnderlying) external returns (uint256 amountBurned) {
+  function withdrawUnderlying(uint256 amountUnderlying) public returns (uint256 amountBurned) {
     TestVault vault = TestVault(token);
     uint256 bal = vault.balance();
     uint256 supply = vault.totalSupply();
@@ -80,5 +92,12 @@ contract TestAdapter {
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     TestVault(token).withdraw(amountBurned);
     underlying.safeTransfer(msg.sender, amountUnderlying);
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountToWithdraw) external returns (uint256 amountReceived) {
+    uint256 available = availableLiquidity();
+    amountReceived = amountToWithdraw > available ? available : amountToWithdraw;
+    if (amountReceived == 0) return 0;
+    withdrawUnderlying(amountReceived);
   }
 }
