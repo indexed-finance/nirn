@@ -6,6 +6,17 @@ interface IBZX {
   function getLoanPoolsList(uint256 start, uint256 count) external view returns (address[] memory loanPoolsList);
   function loanPoolToUnderlying(address pool) external view returns (address underlying);
   function underlyingToLoanPool(address pool) external view returns (IToken underlying);
+  function getLenderInterestData(address lender, address loanToken)
+    external
+    view
+    returns (
+      uint256 interestPaid,
+      uint256 interestPaidDate,
+      uint256 interestOwedPerDay,
+      uint256 interestUnPaid,
+      uint256 interestFeePercent,
+      uint256 principalTotal
+    );
 }
 
 

@@ -5,9 +5,14 @@
     "strict": true,
     "esModuleInterop": true,
     "outDir": "dist",
-    "typeRoots": ["./typechain", "./node_modules/@types"],
-    "types": ["@nomiclabs/hardhat-ethers", "@nomiclabs/hardhat-waffle"]
+    "typeRoots": ["./@types", "./typechain", "node_modules/@types"],
+    "types": ["@nomiclabs/hardhat-ethers", "@nomiclabs/hardhat-waffle"],
+    "allowSyntheticDefaultImports": true
   },
-  "include": ["./test"],
-  "files": ["./hardhat.config.ts"]
+  "exclude": ["**/node_modules"],
+  "include": ["test", "@types", "typechain"],
+  "files": ["./hardhat.config.ts"],
+  "ts-node": {
+    "files": true
+  }
 }

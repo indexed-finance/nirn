@@ -52,6 +52,8 @@ interface IAdapterRegistry {
 
   function getProtocolMetadata(uint256 id) external view returns (address protocolAdapter, string memory name);
 
+  function getProtocolForTokenAdapter(address adapter) external view returns (address protocolAdapter);
+
 /* ========== Supported Token Queries ========== */
 
   function isSupported(address underlying) external view returns (bool);

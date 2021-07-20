@@ -1,27 +1,20 @@
 import { getAddress } from "@ethersproject/address"
 import { CrErc20Adapter } from "../../typechain"
-import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
+import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
 import { deployContract, CreamConverter } from '../shared'
 
 
 describe('CrErc20Adapter', () => {
-  let implementation: CrErc20Adapter;
-
-  before('Deploy implementation', async () => {
-    implementation = await deployContract('CrErc20Adapter');
+  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`cr${symbol}`, function () {
+    shouldBehaveLikeErc20Adapter(
+      async () => (await deployContract('CrErc20Adapter')) as CrErc20Adapter,
+      async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
+      CreamConverter,
+      _underlying,
+      _ctoken,
+      symbol,
+    )
   })
-
-  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => behavesLikeErc20Adapter(
-    () => implementation,
-    async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
-    async (adapter, underlying, token) => underlying.balanceOf(token.address),
-    CreamConverter,
-    _underlying,
-    _ctoken,
-    'Cream',
-    'cr',
-    symbol
-  );
 
   // Working
   testAdapter(getAddress('0xa47c8bf37f92abed4a126bda807a7b7498661acd'), getAddress('0x51f48b638f82e8765f7a26373a2cb4ccb10c07af'), 'UST');
@@ -68,7 +61,6 @@ describe('CrErc20Adapter', () => {
   testAdapter(getAddress('0x36f3fd68e7325a35eb768f1aedaae9ea0689d723'), getAddress('0x3c6c553a95910f9fc81c98784736bd628636d296'), 'ESD');
   testAdapter(getAddress('0x8798249c2e607446efb7ad49ec89dd1865ff4272'), getAddress('0x228619cca194fbe3ebeb2f835ec1ea5080dafbb2'), 'xSUSHI');
   testAdapter(getAddress('0xcbc1065255cbc3ab41a6868c22d1f1c573ab89fd'), getAddress('0xfd609a03b393f1a1cfcacedabf068cad09a924e2'), 'CRETH2');
-
   testAdapter(getAddress('0xdf574c24545e5ffecb9a659c229253d4111d87e1'), getAddress('0xd692ac3245bb82319a31068d6b8412796ee85d2c'), 'HUSD');
   testAdapter(getAddress('0x6b175474e89094c44da98b954eedeac495271d0f'), getAddress('0x92b767185fb3b04f881e3ac8e5b0662a027a1d9f'), 'DAI');
   testAdapter(getAddress('0x584bc13c7d411c00c01a62e8019472de68768430'), getAddress('0x10a3da2bb0fae4d591476fd97d6636fd172923a8'), 'HEGIC');
@@ -82,33 +74,28 @@ describe('CrErc20Adapter', () => {
   testAdapter(getAddress('0xcc4304a31d09258b0029ea7fe63d032f52e44efe'), getAddress('0x98e329eb5aae2125af273102f3440de19094b77c'), 'SWAP');
   testAdapter(getAddress('0xba4cfe5741b357fa371b506e5db0774abfecf8fc'), getAddress('0x1a122348b73b58ea39f822a89e6ec67950c2bbd0'), 'vVSP');
 
-  // Require pair adapter for getTokens
+  // SLP tokens blocked by protocol
   // testAdapter(getAddress('0xceff51756c56ceffca006cd410b03ffc46dd3a58'), getAddress('0x73f6cba38922960b7092175c0add22ab8d0e81fc'), 'SLP');
   // testAdapter(getAddress('0xc3d03e4f041fd4cd388c549ee2a29a9e5075882f'), getAddress('0x38f27c03d6609a86ff7716ad03038881320be4ad'), 'SLP');
   // testAdapter(getAddress('0x397ff1542f962076d0bfe58ea045ffa2d347aca0'), getAddress('0x5ecad8a75216cea7dff978525b2d523a251eea92'), 'SLP');
   // testAdapter(getAddress('0x06da0fd433c1a5d7a4faa01111c044910a184553'), getAddress('0x5c291bc83d15f71fb37805878161718ea4b6aee9'), 'SLP');
   // testAdapter(getAddress('0x795065dcc9f64b5614c407a6efdc400da6221fb0'), getAddress('0x6ba0c66c48641e220cf78177c144323b3838d375'), 'SLP');
   // testAdapter(getAddress('0x088ee5007c98a9677165d78dd2109ae4a3d04d0c'), getAddress('0xd532944df6dfd5dd629e8772f03d4fc861873abf'), 'SLP');
-  // testAdapter(getAddress('0xbb2b8038a1640196fbe3e38816f3e67cba72d940'), getAddress('0x011a014d5e8eb4771e575bb1000318d509230afa'), 'UNI-V2');
-  // testAdapter(getAddress('0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852'), getAddress('0xe6c3120f38f56deb38b69b65cc7dcaf916373963'), 'UNI-V2');
-  // testAdapter(getAddress('0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc'), getAddress('0x4fe11bc316b6d7a345493127fbe298b95adaad85'), 'UNI-V2');
-  // testAdapter(getAddress('0xa478c2975ab1ea89e8196811f51a7b7ade33eb11'), getAddress('0xcd22c4110c12ac41acefa0091c432ef44efaafa0'), 'UNI-V2');
-
-
-  // testAdapter(getAddress('0xdf5e0e81dff6faf3a7e52ba697820c5e32d806a8'), getAddress('0x9baf8a5236d44ac410c0186fe39178d5aad0bb87'), 'yDAI+yUSDC+yUSDT+yTUSD');
-  // testAdapter(getAddress('0x5dbcf33d8c2e976c6b560249878e6f1491bca25c'), getAddress('0x4ee15f44c6f0d8d1136c83efd2e8e4ac768954c6'), 'yyDAI+yUSDC+yUSDT+yTUSD');
-  /* Require Yearn Adapter
+  testAdapter(getAddress('0xbb2b8038a1640196fbe3e38816f3e67cba72d940'), getAddress('0x011a014d5e8eb4771e575bb1000318d509230afa'), 'UNI-V2');
+  testAdapter(getAddress('0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852'), getAddress('0xe6c3120f38f56deb38b69b65cc7dcaf916373963'), 'UNI-V2');
+  testAdapter(getAddress('0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc'), getAddress('0x4fe11bc316b6d7a345493127fbe298b95adaad85'), 'UNI-V2');
+  testAdapter(getAddress('0xa478c2975ab1ea89e8196811f51a7b7ade33eb11'), getAddress('0xcd22c4110c12ac41acefa0091c432ef44efaafa0'), 'UNI-V2');
+  testAdapter(getAddress('0xdf5e0e81dff6faf3a7e52ba697820c5e32d806a8'), getAddress('0x9baf8a5236d44ac410c0186fe39178d5aad0bb87'), 'yDAI+yUSDC+yUSDT+yTUSD');
+  testAdapter(getAddress('0x5dbcf33d8c2e976c6b560249878e6f1491bca25c'), getAddress('0x4ee15f44c6f0d8d1136c83efd2e8e4ac768954c6'), 'yyDAI+yUSDC+yUSDT+yTUSD');
   testAdapter(getAddress('0xe1237aa7f535b0cc33fd973d66cbf830354d16c7'), getAddress('0x01da76dea59703578040012357b81ffe62015c2d'), 'yWETH');
   testAdapter(getAddress('0xa9fe4601811213c340e850ea305481aff02f5b28'), getAddress('0x4202d97e00b9189936edf37f8d01cff88bdd81d4'), 'yvWETH');
   testAdapter(getAddress('0x4b5bfd52124784745c1071dcb244c6688d2533d3'), getAddress('0x4baa77013ccd6705ab0522853cb0e9d453579dd4'), 'yUSD');
-
-  */
+  testAdapter(getAddress('0x27b7b1ad7288079a66d12350c828d3c00a6f07d7'), getAddress('0x45406ba53bb84cd32a58e7098a2d4d1b11b107f6'), 'yvCurve-IronBank');
+  testAdapter(getAddress('0x986b4aff588a109c09b50a03f42e4110e29d353f'), getAddress('0x6d1b9e01af17dd08d6dec08e210dfd5984ff1c20'), 'yvCurve-sETH');
+  // Unknown revert
+  // testAdapter(getAddress('0xdcd90c7f6324cfa40d7169ef80b12031770b4325'), getAddress('0x1f9b4756b008106c806c7e64322d7ed3b72cb284'), 'yvCurve-stETH');
+ 
   /* Unknown Error
   testAdapter(getAddress('0x0316eb71485b0ab14103307bf65a021042c6d380'), getAddress('0x054b7ed3f45714d3091e82aad64a1588dc4096ed'), 'HBTC');
   testAdapter(getAddress('0x9afb950948c2370975fb91a441f36fdc02737cd4'), getAddress('0xd5103afcd0b3fa865997ef2984c66742c51b2a8b'), 'HFIL'); */
-
-
-  /*   testAdapter(getAddress('0x27b7b1ad7288079a66d12350c828d3c00a6f07d7'), getAddress('0x45406ba53bb84cd32a58e7098a2d4d1b11b107f6'), 'yvCurve-IronBank');
-  testAdapter(getAddress('0x986b4aff588a109c09b50a03f42e4110e29d353f'), getAddress('0x6d1b9e01af17dd08d6dec08e210dfd5984ff1c20'), 'yvCurve-sETH');
-  testAdapter(getAddress('0xdcd90c7f6324cfa40d7169ef80b12031770b4325'), getAddress('0x1f9b4756b008106c806c7e64322d7ed3b72cb284'), 'yvCurve-stETH'); */
 });

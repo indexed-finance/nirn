@@ -38,6 +38,28 @@ contract FuseErc20Adapter is AbstractErc20Adapter {
     return __protocolName;
   }
 
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return (
+      tokenAmount
+      .mul(CTokenParams.currentExchangeRate(token))
+      / uint256(1e18)
+    );
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
+    return underlyingAmount
+      .mul(1e18)
+      / CTokenParams.currentExchangeRate(token);
+  }
+
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256) {

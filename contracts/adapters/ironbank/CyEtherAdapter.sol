@@ -8,7 +8,7 @@ import "../../interfaces/IWETH.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/MinimalSignedMath.sol";
-import { CTokenParams } from "../../libraries/CTokenParams.sol";
+import { CyTokenParams } from "../../libraries/CyTokenParams.sol";
 
 
 contract CyEtherAdapter is AbstractEtherAdapter() {
@@ -20,6 +20,28 @@ contract CyEtherAdapter is AbstractEtherAdapter() {
 
   function _protocolName() internal view virtual override returns (string memory) {
     return "IronBank";
+  }
+
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return (
+      tokenAmount
+      .mul(CyTokenParams.currentExchangeRate(token))
+      / uint256(1e18)
+    );
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
+    return underlyingAmount
+      .mul(1e18)
+      / CyTokenParams.currentExchangeRate(token);
   }
 
 /* ========== Performance Queries ========== */
@@ -36,7 +58,7 @@ contract CyEtherAdapter is AbstractEtherAdapter() {
       uint256 borrowsPrior,
       uint256 reservesPrior,
       uint256 reserveFactorMantissa
-    ) = CTokenParams.getInterestRateParameters(address(cToken));
+    ) = CyTokenParams.getInterestRateParameters(address(cToken));
 
     return IInterestRateModel(model).getSupplyRate(
       cashPrior.add(liquidityDelta),

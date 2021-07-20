@@ -1,170 +1,51 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
-
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../interfaces/IAdapterRegistry.sol";
-import "../interfaces/ITokenAdapter.sol";
-import "../interfaces/IERC20.sol";
-import "../libraries/TransferHelper.sol";
-import "../libraries/SymbolHelper.sol";
-import "../libraries/LowGasSafeMath.sol";
-import "../libraries/APRNet.sol";
-import "../libraries/MinimalSignedMath.sol";
-import "../libraries/Fraction.sol";
-import "./ERC20.sol";
+import "../libraries/RebalanceValidation.sol";
+import "../libraries/SafeCast.sol";
+import "./NirnVaultBase.sol";
 
 
-contract NirnVault is ERC20, Ownable() {
+contract NirnVault is NirnVaultBase {
   using Fraction for uint256;
   using TransferHelper for address;
   using LowGasSafeMath for uint256;
-  using MinimalSignedMath for uint256;
   using MinimalSignedMath for int256;
+  using SafeCast for uint256;
+  using SafeCast for int256;
+  using ArrayHelper for uint256[];
+  using ArrayHelper for bytes32[];
+  using ArrayHelper for IErc20Adapter[];
+  using DynamicArrays for uint256[];
+  using AdapterHelper for IErc20Adapter[];
 
-/* ========== Events ========== */
-
-  event AdapterAdded(address adapter, address wrapper, uint256 weight);
-
-  event AdapterRemoved(address adapter);
-
-  event AdapterWeightUpdated(address adapter, uint256 weight);
-
-/* ========== Constants ========== */
-
-  IAdapterRegistry public immutable registry;
-  /** @dev Address of a contract which can only execute specific functions and only allows EOAs to call. */
-  address public immutable eoaSafeCaller;
-  /** @dev Underlying asset for the vault. */
-  address public immutable underlying;
-  string public name;
-  string public symbol;
-
-/* ========== Storage ========== */
-
-  address public feeRecipient;
-  /** @dev Token adapters for the underlying token. */
-  IErc20Adapter[] public adapters;
-  /** @dev Weights for adapters at corresponding index as a fraction of 1e18 (sum must be 1e18). */
-  uint256[] public weights;
-  /** @dev Ratio of underlying token to keep in the vault for cheap deposits as a fraction of 1e18. */
-  uint256 public reserveRatio = 1e17;
-  /** @dev Tokens which can not be sold - wrapper tokens used by the adapters. */
-  mapping(address => bool) public lockedTokens;
-  /** @dev Last price at which fees were taken. */
-  uint256 public priceAtLastFee = 1e18;
-  /** @dev Fee taken on profit as a fraction of 1e18. */
-  uint256 public performanceFee = 5e16;
-
-  function getAdapters() external view returns (IErc20Adapter[] memory _adapters) {
-    _adapters = adapters;
-  }
-
-  function getWeights() external view returns (uint256[] memory _weights) {
-    _weights = weights;
-  }
-
-/* ========== Modifiers ========== */
-
-  /**
-   * @dev Prevents calls from arbitrary contracts.
-   * Caller must be an EOA account or a pre-approved "EOA-safe" caller,
-   * meaning a smart contract which can only be called by an EOA and has
-   * a limited set of functions it can call.
-   * This prevents griefing via flash loans that force the vault to use
-   * adapters with low interest rates.
-   */
-  modifier onlyEOA {
-    require(msg.sender == tx.origin || msg.sender == eoaSafeCaller, "!EOA");
-    _;
-  }
-
-/* ========== Underlying Balance Queries ========== */
+/* ========== Constructor ========== */
 
   constructor(
     address _registry,
     address _eoaSafeCaller,
-    address _underlying
-  ) {
-    registry = IAdapterRegistry(_registry);
-    eoaSafeCaller = _eoaSafeCaller;
-    underlying = _underlying;
-    weights.push(1e18);
-    (address adapter,) = IAdapterRegistry(_registry).getAdapterWithHighestAPR(_underlying);
-    _underlying.safeApproveMax(adapter);
-    address wrapper = IErc20Adapter(adapter).token();
-    wrapper.safeApproveMax(adapter);
-    lockedTokens[wrapper] = true;
-    adapters.push(IErc20Adapter(adapter));
-    feeRecipient = msg.sender;
-    name = string(abi.encodePacked(
-      "Indexed ",
-      SymbolHelper.getName(_underlying)
-    ));
-    symbol = string(abi.encodePacked(
-      "n",
-      SymbolHelper.getSymbol(_underlying)
-    ));
-    emit AdapterAdded(adapter, wrapper, 1e18);
-  }
+    address _underlying,
+    address _rewardsSeller,
+    address _feeRecipient
+  ) NirnVaultBase(_registry, _eoaSafeCaller, _underlying, _rewardsSeller, _feeRecipient) {}
 
-/* ========== Underlying Balance Queries ========== */
-
-  /**
-   * @dev Returns the value in `underlying` of the vault's deposits
-   * in each adapter.
-   */
-  function getBalances() public view returns (uint256[] memory balances) {
-    return _getBalances(adapters);
-  }
-
-  /**
-   * @dev Returns total value of vault in `underlying`
-   */
-  function balance() public view returns (uint256 sum) {
-    uint256 len = adapters.length;
-    for (uint256 i; i < len; i++) {
-      sum = sum.add(adapters[i].balanceUnderlying());
-    }
-    sum = sum.add(IERC20(underlying).balanceOf(address(this)));
-  }
-
-  function _getBalances(IErc20Adapter[] memory _adapters) internal view returns (uint256[] memory balances) {
-    uint256 len = _adapters.length;
-    balances = new uint256[](len);
-    for (uint256 i; i < len; i++) {
-      balances[i] = _adapters[i].balanceUnderlying();
-    }
-  }
-
-  function _getRebalanceParameters()
-    internal
-    view
-    returns (
-      IErc20Adapter[] memory _adapters,
-      uint256[] memory _balances,
-      uint256 totalAvailableBalance
-    )
-  {
-    _adapters = adapters;
-    _balances = _getBalances(_adapters);
-    uint256 totalBalance = APRNet.sum(_balances).add(IERC20(underlying).balanceOf(address(this)));
-    totalAvailableBalance = totalBalance.sub(totalBalance.mulFractionE18(reserveRatio));
-  }
-
-/* ========== Rebalance Queries ========== */
+/* ========== Liquidity Delta Queries ========== */
 
   function getCurrentLiquidityDeltas() external view returns (int256[] memory liquidityDeltas) {
-    (, uint256[] memory balances, uint256 totalAvailableBalance) = _getRebalanceParameters();
-    liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, balances, weights);
+    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
+    uint256[] memory balances = adapters.getBalances();
+    uint256 totalProductiveBalance = balances.sum().add(reserveBalance()).mulSubFractionE18(reserveRatio);
+    liquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, balances, weights);
   }
 
   function getHypotheticalLiquidityDeltas(
     uint256[] memory proposedWeights
-  ) external view returns (int256[] memory liquidityDeltas) {
-    (, uint256[] memory balances, uint256 totalAvailableBalance) = _getRebalanceParameters();
+  ) public view returns (int256[] memory liquidityDeltas) {
+    uint256[] memory balances = getBalances();
+    uint256 totalProductiveBalance = balances.sum().add(reserveBalance()).mulSubFractionE18(reserveRatio);
     require(proposedWeights.length == balances.length, "bad lengths");
-    liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, balances, proposedWeights);
+    liquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, balances, proposedWeights);
   }
 
   function getHypotheticalLiquidityDeltas(
@@ -172,33 +53,28 @@ contract NirnVault is ERC20, Ownable() {
     uint256[] memory proposedWeights
   ) external view returns (int256[] memory liquidityDeltas) {
     require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    (,, uint256 totalAvailableBalance) = _getRebalanceParameters();
-    uint256[] memory balancesForProposed = _getBalances(proposedAdapters);
-    liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, balancesForProposed, proposedWeights);
+    liquidityDeltas = AdapterHelper.getLiquidityDeltas(
+      balance().mulSubFractionE18(reserveRatio),
+      proposedAdapters.getBalances(),
+      proposedWeights
+    );
   }
 
 /* ========== APR Queries ========== */
 
   function getAPR() external view returns (uint256) {
-    (
-      IErc20Adapter[] memory _adapters,
-      uint256[] memory _balances,
-      uint256 totalAvailableBalance
-    ) = _getRebalanceParameters();
-    uint256[] memory _weights = weights;
-    int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, _balances, _weights);
-    return APRNet.getNetAPR(_adapters, _weights, liquidityDeltas, reserveRatio);
+    (DistributionParameters memory params,,) = currentDistribution();
+    return params.netAPR;
   }
 
   function getHypotheticalAPR(uint256[] memory proposedWeights) external view returns (uint256) {
-    (
-      IErc20Adapter[] memory _adapters,
-      uint256[] memory _balances,
-      uint256 totalAvailableBalance
-    ) = _getRebalanceParameters();
-    require(proposedWeights.length == _adapters.length, "bad lengths");
-    int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, _balances, proposedWeights);
-    return APRNet.getNetAPR(_adapters, proposedWeights, liquidityDeltas, reserveRatio);
+    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
+    require(proposedWeights.length == adapters.length, "bad lengths");
+    uint256[] memory balances = adapters.getBalances();
+    uint256 _reserveRatio = reserveRatio;
+    uint256 totalProductiveBalance = balances.sum().add(reserveBalance()).mulSubFractionE18(_reserveRatio);
+    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, balances, proposedWeights);
+    return adapters.getNetAPR(proposedWeights, liquidityDeltas).mulSubFractionE18(_reserveRatio);
   }
 
   function getHypotheticalAPR(
@@ -206,189 +82,229 @@ contract NirnVault is ERC20, Ownable() {
     uint256[] memory proposedWeights
   ) external view returns (uint256) {
     require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    (,,uint256 totalAvailableBalance) = _getRebalanceParameters();
-    int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(
-      totalAvailableBalance,
-       _getBalances(proposedAdapters),
-      proposedWeights
-    );
-    return APRNet.getNetAPR(proposedAdapters, proposedWeights, liquidityDeltas, reserveRatio);
+    uint256 _reserveRatio = reserveRatio;
+    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
+    uint256 totalProductiveBalance = adapters.getBalances().sum().add(reserveBalance()).mulSubFractionE18(_reserveRatio);
+    // uint256[] memory balances = proposedAdapters.getBalances();
+    // uint256 totalProductiveBalance = balances.sum().add(reserveBalance()).mulSubFractionE18(_reserveRatio);
+    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, proposedAdapters.getBalances(), proposedWeights);
+    return AdapterHelper.getNetAPR(proposedAdapters, proposedWeights, liquidityDeltas).mulSubFractionE18(_reserveRatio);
   }
 
-/* ========== Fees ========== */
-
-  function calculateFee(uint256 supply, uint256 bal, uint256 shares) internal view returns (uint256 fee) {
-    uint256 lastPrice = priceAtLastFee;
-    uint256 priceNow = bal.toFractionE18(supply);
-    if (priceNow <= lastPrice) return 0;
-    uint256 profitPerShare = priceNow - lastPrice;
-    uint256 profit = shares.mulFractionE18(profitPerShare);
-    return profit.mulFractionE18(performanceFee);
-  }
-
-  function getPendingFees() external view returns (uint256) {
-    uint256 bal = balance();
-    uint256 supply = totalSupply;
-    return calculateFee(supply, bal, supply);
-  }
-
-  function takeProfitFee() external {
-    uint256 lastPrice = priceAtLastFee;
-    uint256 bal = balance();
-    uint256 supply = totalSupply;
-    uint256 priceNow = bal.toFractionE18(supply);
-    if (priceNow <= lastPrice) return;
-    uint256 profitPerShare = priceNow - lastPrice;
-    uint256 totalProfit = supply.mulFractionE18(profitPerShare);
-    uint256 profitFee = totalProfit.mulFractionE18(performanceFee);
-    lastPrice = bal.sub(profitFee).toFractionE18(supply);
-    _transferOut(feeRecipient, profitFee);
-  }
-
-/* ========== Mint/Burn ========== */
+/* ========== Deposit/Withdraw ========== */
 
   function deposit(uint256 amount) external returns (uint256 shares) {
-    uint256 bal = balance();
-    underlying.safeTransferFrom(msg.sender, address(this), amount);
-    uint256 supply = totalSupply;
-    shares = supply == 0 ? amount : (amount.mul(totalSupply) / bal);
-    _mint(msg.sender, shares);
+    shares = depositTo(amount, msg.sender);
   }
 
-  function depositTo(uint256 amount, address to) external returns (uint256 shares) {
+  function depositTo(uint256 amount, address to) public returns (uint256 shares) {
     uint256 bal = balance();
     underlying.safeTransferFrom(msg.sender, address(this), amount);
-    uint256 supply = totalSupply;
-    shares = supply == 0 ? amount : (amount.mul(supply) / bal);
+    uint256 supply = claimFees(bal, totalSupply);
+    shares = supply == 0 ? amount : amount.mul(supply) / bal;
     _mint(to, shares);
   }
 
   function withdraw(uint256 shares) external returns (uint256 owed) {
-    IErc20Adapter[] memory _adapters = adapters;
-    uint256[] memory _balances = _getBalances(_adapters);
-    uint256 reserveBalance = IERC20(underlying).balanceOf(address(this));
-    uint256 totalBalance = APRNet.sum(_balances).add(reserveBalance);
-    uint256 supply = totalSupply;
-    uint256 fee = calculateFee(supply, totalBalance, shares);
+    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
+    uint256[] memory balances = adapters.getBalances();
+    uint256 _reserveBalance = reserveBalance();
+    uint256 totalBalance = balances.sum().add(_reserveBalance);
+    uint256 supply = claimFees(totalBalance, totalSupply);
     owed = shares.mul(totalBalance) / supply;
     _burn(msg.sender, shares);
-    _withdrawToMatchAmount(_adapters, reserveBalance, _balances, owed);
-    _transferOut(feeRecipient, fee);
-    owed = owed.sub(fee);
+    withdrawToMatchAmount(adapters, weights, balances, _reserveBalance, owed);
     _transferOut(msg.sender, owed);
   }
 
-  function _withdrawToMatchAmount(
-    IErc20Adapter[] memory _adapters,
-    uint256 reserveBalance,
+  function withdrawToMatchAmount(
+    IErc20Adapter[] memory adapters,
+    uint256[] memory weights,
     uint256[] memory balances,
+    uint256 _reserveBalance,
     uint256 amount
   ) internal {
-    if (amount > reserveBalance) {
-      uint256 remainder = amount.sub(reserveBalance);
+    if (amount > _reserveBalance) {
+      uint256 remainder = amount.sub(_reserveBalance);
       uint256 len = balances.length;
+      uint256[] memory removeIndices = DynamicArrays.dynamicUint256Array(len);
       for (uint256 i; i < len; i++) {
         uint256 bal = balances[i];
-        if (remainder > bal) {
-          remainder = remainder.sub(bal);
-          _adapters[i].withdrawAll();
-        } else {
-          _adapters[i].withdrawUnderlying(remainder);
-          break;
+        uint256 amountToWithdraw = remainder > bal ? bal : remainder;
+        uint256 amountWithdrawn = adapters[i].withdrawUnderlyingUpTo(amountToWithdraw);
+        remainder = remainder >= amountWithdrawn ? remainder - amountWithdrawn : 0;
+        if (weights[i] == 0 && amountWithdrawn == bal) {
+          removeIndices.dynamicPush(i);
         }
+        if (remainder == 0) break;
       }
+      require(remainder == 0, "insufficient available balance");
+      removeAdapters(removeIndices);
     }
-  }
-
-/* ========== Price Queries ========== */
-
-  function getPricePerFullShare() public view returns (uint256) {
-    return balance().toFractionE18(totalSupply);
-  }
-
-  function getPricePerFullShareWithFee() public view returns (uint256) {
-    uint256 bal = balance();
-    uint256 supply = totalSupply;
-    uint256 pendingFee = calculateFee(supply, bal, supply);
-    return bal.sub(pendingFee).toFractionE18(supply);
   }
 
 /* ========== Rebalance Actions ========== */
 
   function rebalance() external onlyEOA {
-        (
-      IErc20Adapter[] memory _adapters,
-      uint256[] memory _balances,
-      uint256 totalAvailableBalance
-    ) = _getRebalanceParameters();
-    int256[] memory liquidityDeltas = APRNet.calculateLiquidityDeltas(totalAvailableBalance, _balances, weights);
-    APRNet.rebalance(_adapters, liquidityDeltas);
+    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
+    uint256[] memory balances = adapters.getBalances();
+    uint256 _reserveBalance = reserveBalance();
+    uint256 totalProductiveBalance = balances.sum().add(_reserveBalance).mulSubFractionE18(reserveRatio);
+    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, balances, weights);
+    uint256[] memory removedIndices = AdapterHelper.rebalance(
+      adapters,
+      weights,
+      liquidityDeltas,
+      _reserveBalance
+    );
+    removeAdapters(removedIndices);
   }
 
   function rebalanceWithNewWeights(uint256[] memory proposedWeights) external onlyEOA {
-    APRNet.validateWeights(proposedWeights);
-    IErc20Adapter[] memory _adapters = adapters;
-    uint256[] memory balances = _getBalances(_adapters);
-    uint256 totalBalance = APRNet.sum(balances).add(IERC20(underlying).balanceOf(address(this)));
-    int256[] memory liquidityDeltasCurrent = APRNet.calculateLiquidityDeltas(totalBalance, balances, weights);
-    int256[] memory liquidityDeltasProposed = APRNet.calculateLiquidityDeltas(totalBalance, balances, proposedWeights);
-    uint256 currentAPR = APRNet.getNetAPR(_adapters, weights, liquidityDeltasCurrent);
-    uint256 suggestedAPR = APRNet.getNetAPR(_adapters, proposedWeights, liquidityDeltasProposed);
-    uint256 diff = suggestedAPR.sub(currentAPR, "!increased");
-    // Require improvement of 5% of current APR to accept changes
-    require((diff.mul(1e18) / currentAPR) >= 5e16, "insufficient improvement");
-    weights = proposedWeights;
-    APRNet.rebalance(_adapters, liquidityDeltasProposed);
+    (
+      DistributionParameters memory params,
+      uint256 totalProductiveBalance,
+      uint256 _reserveBalance
+    ) = currentDistribution();
+    RebalanceValidation.validateProposedWeights(params.weights, proposedWeights);
+    // Get liquidity deltas and APR for new weights
+    int256[] memory proposedLiquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, params.balances, proposedWeights);
+    uint256 proposedAPR = AdapterHelper.getNetAPR(params.adapters, proposedWeights, proposedLiquidityDeltas);
+    // Validate rebalance results in sufficient APR improvement
+    RebalanceValidation.validateSufficientImprovement(params.netAPR, proposedAPR, minimumAPRImprovement);
+    // Rebalance and remove adapters with 0 weight which the vault could fully exit.
+    uint256[] memory removedIndices = AdapterHelper.rebalance(params.adapters, proposedWeights, proposedLiquidityDeltas, _reserveBalance);
+    uint256 removeLen = removedIndices.length;
+    if (removeLen > 0) {
+      for (uint256 i = removeLen; i > 0; i--) {
+        uint256 rI = removedIndices[i-1];
+        emit AdapterRemoved(params.adapters[rI]);
+        params.adapters.mremove(rI);
+        proposedWeights.mremove(rI);
+      }
+    }
+    setAdaptersAndWeights(params.adapters, proposedWeights);
+  }
+
+  struct DistributionParameters {
+    IErc20Adapter[] adapters;
+    uint256[] weights;
+    uint256[] balances;
+    int256[] liquidityDeltas;
+    uint256 netAPR;
+  }
+
+  function currentDistribution() internal view returns (
+    DistributionParameters memory params,
+    uint256 totalProductiveBalance,
+    uint256 _reserveBalance
+  ) {
+    uint256 _reserveRatio = reserveRatio;
+    (params.adapters, params.weights) = getAdaptersAndWeights();
+    uint256 len = params.adapters.length;
+    uint256 netAPR;
+    params.balances = params.adapters.getBalances();
+    _reserveBalance = reserveBalance();
+    totalProductiveBalance = params.balances.sum().add(_reserveBalance).mulSubFractionE18(_reserveRatio);
+    params.liquidityDeltas = new int256[](len);
+    for (uint256 i; i < len; i++) {
+      IErc20Adapter adapter = params.adapters[i];
+      uint256 weight = params.weights[i];
+      uint256 targetBalance = totalProductiveBalance.mulFractionE18(weight);
+      int256 liquidityDelta = targetBalance.toInt256().sub(params.balances[i].toInt256());
+      netAPR = netAPR.add(
+        adapter.getHypotheticalAPR(liquidityDelta).mulFractionE18(weight)
+      );
+      params.liquidityDeltas[i] = liquidityDelta;
+    }
+    params.netAPR = netAPR.mulSubFractionE18(_reserveRatio);
+  }
+
+  function processProposedDistribution(
+    DistributionParameters memory currentParams,
+    uint256 totalProductiveBalance,
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) internal view returns (DistributionParameters memory params) {
+    uint256[] memory excludedAdapterIndices = currentParams.adapters.getExcludedAdapterIndices(proposedAdapters);
+    uint256 proposedSize = proposedAdapters.length;
+    uint256 expandedSize = proposedAdapters.length + excludedAdapterIndices.length;
+    params.adapters = new IErc20Adapter[](expandedSize);
+    params.weights = new uint256[](expandedSize);
+    params.balances = new uint256[](expandedSize);
+    params.liquidityDeltas = new int256[](expandedSize);
+    uint256 i;
+    uint256 netAPR;
+    for (; i < proposedSize; i++) {
+      IErc20Adapter adapter = proposedAdapters[i];
+      params.adapters[i] = adapter;
+      uint256 weight = proposedWeights[i];
+      params.weights[i] = weight;
+      uint256 targetBalance = totalProductiveBalance.mulFractionE18(weight);
+      uint256 _balance = adapter.balanceUnderlying();
+      params.balances[i] = _balance;
+      int256 liquidityDelta = targetBalance.toInt256().sub(_balance.toInt256());
+      netAPR = netAPR.add(
+        adapter.getHypotheticalAPR(liquidityDelta).mulFractionE18(weight)
+      );
+      params.liquidityDeltas[i] = liquidityDelta;
+    }
+    netAPR = netAPR.mulSubFractionE18(reserveRatio);
+    RebalanceValidation.validateSufficientImprovement(currentParams.netAPR, netAPR, minimumAPRImprovement);
+    for (; i < expandedSize; i++) {
+      // i - proposedSize = index in excluded adapter indices array
+      // The value in excludedAdapterIndices is the index in the current adapters array
+      // for the adapter which is being removed.
+      // The lending markets for these adapters may or may not have sufficient liquidity to
+      // process a full withdrawal requested by the vault, so we keep those adapters in the
+      // adapters list, but set a weight of 0 and a liquidity delta of -balance
+      uint256 rI = excludedAdapterIndices[i - proposedSize];
+      params.adapters[i] = currentParams.adapters[rI];
+      params.weights[i] = 0;
+      uint256 _balance = currentParams.balances[rI];
+      params.balances[i] = _balance;
+      params.liquidityDeltas[i] = -_balance.toInt256();
+    }
   }
 
   function rebalanceWithNewAdapters(
-    IErc20Adapter[] memory proposedAdapters,
-    uint256[] memory proposedWeights
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
   ) external onlyEOA {
-    require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    _validateAdapters(proposedAdapters);
-    APRNet.validateWeights(proposedWeights);
-    IErc20Adapter[] memory _adapters = adapters;
-    uint256[] memory balances = _getBalances(_adapters);
-    uint256 totalBalance = APRNet.sum(balances).add(IERC20(underlying).balanceOf(address(this)));
-    int256[] memory liquidityDeltasCurrent = APRNet.calculateLiquidityDeltas(totalBalance, balances, weights);
-    int256[] memory liquidityDeltasProposed = APRNet.calculateLiquidityDeltas(totalBalance, _getBalances(proposedAdapters), proposedWeights);
-    uint256 currentAPR = APRNet.getNetAPR(_adapters, weights, liquidityDeltasCurrent);
-    uint256 suggestedAPR = APRNet.getNetAPR(proposedAdapters, proposedWeights, liquidityDeltasProposed);
-    uint256 diff = suggestedAPR.sub(currentAPR, "!increased");
-    // Require improvement of 5% of current APR to accept changes
-    require((diff.mul(1e18) / currentAPR) >= 5e16, "insufficient improvement");
-    uint256 len = proposedAdapters.length;
-    for (uint256 i; i < len; i++) {
-      _beforeAddAdapter(proposedAdapters[i]);
+    RebalanceValidation.validateAdaptersAndWeights(registry, underlying, proposedAdapters, proposedWeights);
+    (
+      DistributionParameters memory currentParams,
+      uint256 totalProductiveBalance,
+      uint256 _reserveBalance
+    ) = currentDistribution();
+    DistributionParameters memory proposedParams = processProposedDistribution(
+      currentParams,
+      totalProductiveBalance,
+      proposedAdapters,
+      proposedWeights
+    );
+    beforeAddAdapters(proposedParams.adapters);
+    uint256[] memory removedIndices = AdapterHelper.rebalance(
+      proposedParams.adapters,
+      proposedParams.weights,
+      proposedParams.liquidityDeltas,
+      _reserveBalance
+    );
+    uint256 removedLen = removedIndices.length;
+    if (removedLen > 0) {
+      // The indices to remove are necessarily in ascending order, so as long as we remove
+      // them in reverse, the removal of elements will not break the other indices.
+      for (uint256 i = removedLen; i > 0; i--) {
+        uint256 rI = removedIndices[i-1];
+        emit AdapterRemoved(proposedParams.adapters[rI]);
+        proposedParams.adapters.mremove(rI);
+        proposedParams.weights.mremove(rI);
+      }
     }
-    adapters = proposedAdapters;
-    weights = proposedWeights;
-    APRNet.rebalance(proposedAdapters, liquidityDeltasProposed);
+    setAdaptersAndWeights(proposedParams.adapters, proposedParams.weights);
   }
 
   function _transferOut(address to, uint256 amount) internal {
     underlying.safeTransfer(to, amount);
-  }
-
-/* ========== Internal Rebalance Logic ========== */
-
-  function _beforeAddAdapter(IErc20Adapter adapter) internal {
-    address token = adapter.token();
-    underlying.safeApproveMax(address(adapter));
-    token.safeApproveMax(address(adapter));
-    lockedTokens[token] = true;
-  }
-
-  function _validateAdapters(IErc20Adapter[] memory _adapters) internal view {
-    uint256 len = _adapters.length;
-    for (uint256 i; i < len; i++) {
-      IErc20Adapter adapter = _adapters[i];
-      require(registry.isApprovedAdapter(address(adapter)), "!approved");
-      require(adapter.underlying() == underlying, "bad adapter");
-      for (uint256 j = i; j < len; j++) {
-        require(address(adapter) != address(_adapters[j]), "duplicate adapter");
-      }
-    }
   }
 }

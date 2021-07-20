@@ -9,7 +9,7 @@ contract TestERC20 is ERC20 {
   constructor(string memory _name, string memory _symbol, uint256 initBalance) {
     name = _name;
     symbol = _symbol;
-    _mint(msg.sender, initBalance);
+    if (initBalance > 0) _mint(msg.sender, initBalance);
   }
 
   function mint(address to, uint256 amount) external {

@@ -16,7 +16,7 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
 
 /* ========== Constants ========== */
 
-  uint256 public constant DECIMAL = 10 ** 18;
+  uint256 internal constant DECIMAL = 10 ** 18;
   IDyDx public constant dydx = IDyDx(0x1E0447b19BB6EcFdAe1e4AE1694b0C3659614e4e);
 
 /* ========== Storage ========== */
@@ -37,7 +37,7 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
     underlying.safeApproveMax(address(dydx));
   }
 
-/* ========== Metadata Queries ========== */
+/* ========== Metadata ========== */
 
   function name() external view virtual override returns (string memory) {
     return string(abi.encodePacked(
@@ -50,6 +50,10 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
   function balance() public view returns (uint256) {
     Wei memory bal = dydx.getAccountWei(Info(address(this), 0), marketId);
     return bal.value;
+  }
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(address(dydx));
   }
 
 /* ========== Conversion Queries ========== */
@@ -123,6 +127,13 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
     require(amountUnderlying > 0, "DyDx: Burn failed");
     shares = toWrappedAmount(amountUnderlying);
     _burn(msg.sender, shares);
+    _withdraw(amountUnderlying, true);
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
+    uint256 available = availableLiquidity();
+    amountReceived = amountUnderlying >= available ? available : amountUnderlying;
+    _burn(msg.sender, toWrappedAmount(amountReceived));
     _withdraw(amountUnderlying, true);
   }
 

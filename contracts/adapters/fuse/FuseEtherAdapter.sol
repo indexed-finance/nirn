@@ -38,6 +38,22 @@ contract FuseEtherAdapter is AbstractEtherAdapter() {
     return __protocolName;
   }
 
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return address(token).balance;
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) external view virtual override returns (uint256) {
+    return tokenAmount;
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) external view virtual override returns (uint256) {
+    return underlyingAmount;
+  }
+
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256) {

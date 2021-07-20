@@ -21,12 +21,16 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
   address public constant ETH_RESERVE_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-  ILendingPoolAddressesProvider public immutable aave;
+/* ========== Constants ========== */
+
+  ILendingPool public immutable pool;
+  ILendingPoolCore public immutable core;
 
 /* ========== Constructor ========== */
 
   constructor(ILendingPoolAddressesProvider _aave) AbstractErc20Adapter() {
-    aave = _aave;
+    pool = _aave.getLendingPool();
+    core = _aave.getLendingPoolCore();
   }
 
 /* ========== Internal Queries ========== */
@@ -35,14 +39,29 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
     return "Aave V1";
   }
 
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return address(core).balance;
+  }
+
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) external view virtual override returns (uint256) {
+    return tokenAmount;
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) external view virtual override returns (uint256) {
+    return underlyingAmount;
+  }
+
 /* ========== Performance Queries ========== */
 
   function getAPR() external view virtual override returns (uint256 apr) {
-    apr = aave.getLendingPoolCore().getReserveCurrentLiquidityRate(ETH_RESERVE_ADDRESS) / 1e9;
+    apr = core.getReserveCurrentLiquidityRate(ETH_RESERVE_ADDRESS) / 1e9;
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
-    ILendingPoolCore core = aave.getLendingPoolCore();
     (uint256 liquidityRate,,) = core.getReserveInterestRateStrategyAddress(ETH_RESERVE_ADDRESS).calculateInterestRates(
       ETH_RESERVE_ADDRESS,
       core.getReserveAvailableLiquidity(ETH_RESERVE_ADDRESS).add(liquidityDelta),
@@ -83,7 +102,7 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
     amountMinted = amountUnderlying;
-    aave.getLendingPool().deposit{value: amountUnderlying}(ETH_RESERVE_ADDRESS, amountUnderlying, 0);
+    pool.deposit{value: amountUnderlying}(ETH_RESERVE_ADDRESS, amountUnderlying, 0);
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {

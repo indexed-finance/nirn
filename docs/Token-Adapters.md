@@ -4,11 +4,11 @@ Token adapters are the points of contact between a vault, or any other contract 
 
 ## Risks
 
-In order to ensure the security of vaults, it is critically important that the conversion from a wrapped balance to an underlying balance **always be precisely the amount of tokens that can be instantly liquidated** by burning the wrapped tokens, and that this conversion rate **can never be inflated by an attacker who is then able to withdraw the tokens used to inflate it**.
+In order to ensure the security of vaults, it is critically important that the conversion from a wrapped balance to an underlying balance **always be precisely the amount of tokens that can be eventually liquidated\*** by burning the wrapped tokens.
 
 That last one is very important -- if an attacker can inflate the conversion rate, but they are unable to withdraw the tokens used for the inflation, then there is no systemic risk. If, however, it is possible to use flash loans or some other mechanism to inflate a conversion rate and then deflate it without suffering a net loss, that poses a major risk to our system.
 
-Additionally, converted amounts should never be extrapolated to anything else. For example, if we have a vault with 50% of its assets in a Compound token, it **must not** extrapolate the converted value of its cTokens to estimate the total value of the vault. This would be a critical vulnerability.
+Additionally, converted amounts should **never** be extrapolated to anything else. For example, if we have a vault with 50% of its assets in a Compound token, it **must not** extrapolate the converted value of its cTokens to estimate the total value of the vault. This would result in a critical vulnerability.
 
 ## Design Principles
 

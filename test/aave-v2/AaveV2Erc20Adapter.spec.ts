@@ -1,179 +1,192 @@
 import { getAddress } from "@ethersproject/address"
 import { expect } from "chai"
-import { BigNumber, constants } from "ethers"
-import { waffle } from "hardhat"
+import { constants } from "ethers"
 import { AaveV2Erc20Adapter, IAaveDistributionManager, IERC20, IStakedAave } from "../../typechain"
-import { deployContract, getContract, sendTokenTo, getBigNumber, deployClone, getNextContractAddress, latest, advanceTimeAndBlock } from '../shared'
+import {
+  setupAdapterContext,
+  shouldBehaveLikeErc20AdapterDeposit,
+  shouldBehaveLikeErc20AdapterInitialize,
+  shouldBehaveLikeErc20AdapterQueries,
+  shouldBehaveLikeErc20AdapterWithdraw,
+  shouldBehaveLikeErc20AdapterWithdrawAll,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlying
+} from "../Erc20AdapterBehavior.spec"
+import { deployContract, getContract, getNextContractAddress, latest, advanceTimeAndBlock, AaveV2Converter } from '../shared'
 
-describe('AaveV2Erc20Adapter', () => {
-  const [wallet, wallet1, wallet2] = waffle.provider.getWallets();
-  let implementation: AaveV2Erc20Adapter;
-  let adapter: AaveV2Erc20Adapter;
-  let token: IERC20;
-  let aToken: IERC20;
-  let userModule: string;
-  let incentives: IAaveDistributionManager
-  let stkAave: IStakedAave
+describe('AaveV2Erc20Adapter', function () {
   let aave: IERC20
-  let lastUserModule: string
+  let stkAave: IStakedAave
+  let incentives: IAaveDistributionManager
+  let userModule: string
 
-  const testAdapter = (underlying: string, atoken: string, symbol: string) => describe(`a${symbol}`, () => {
-    let amountMinted: BigNumber;
-    
-    before(async () => {
-      implementation = await deployContract('AaveV2Erc20Adapter', '0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5');
-      token = await getContract(underlying, 'IERC20')
-      aToken = await getContract(atoken, 'IERC20')
-      aave = await getContract('0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9', 'IERC20')
-      if (symbol === 'AAVE') {
-        const balance = await aave.balanceOf(wallet.address);
-        if (balance.gt(0)) {
-          await aave.transfer(wallet1.address, balance)
+  before(async function () {
+    aave = await getContract('0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9', 'IERC20')
+    incentives = await getContract('0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5', 'IAaveDistributionManager')
+    stkAave = await getContract('0x4da27a545c0c5B758a6BA100e3a049001de870f5', 'IStakedAave')
+  })
+
+  const testAdapter = (underlying: string, atoken: string, symbol: string) => describe(`a${symbol}`, function () {
+    setupAdapterContext(
+      async () => (await deployContract('AaveV2Erc20Adapter', '0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5')) as AaveV2Erc20Adapter,
+      async (adapter, underlying, token) => (adapter as AaveV2Erc20Adapter).initialize(underlying.address, token.address),
+      AaveV2Converter,
+      underlying,
+      atoken,
+      symbol,
+      async (adapter, underlying, wrapper) => {
+        userModule = await getNextContractAddress(adapter.address)
+        return {
+          depositSenderWrapped: constants.AddressZero,
+          depositReceiverWrapped: userModule,
+          depositReceiverUnderlying: userModule,
+          withdrawalSenderUnderlying: wrapper.address,
         }
       }
-      incentives = await getContract('0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5', 'IAaveDistributionManager')
-      stkAave = await getContract('0x4da27a545c0c5B758a6BA100e3a049001de870f5', 'IStakedAave')
-      adapter = await deployClone(implementation, 'AaveV2Erc20Adapter');
-      await adapter.initialize(token.address, aToken.address);
-      await token.approve(adapter.address, constants.MaxUint256);
-      await aToken.approve(adapter.address, constants.MaxUint256);
-      amountMinted = await getTokens(10)
-      lastUserModule = userModule;
-      userModule = await getNextContractAddress(adapter.address);
-      if (lastUserModule == userModule) {
-        throw new Error('USER MODULE IS THE SAMME ???')
-      }
-    })
+    )
 
-    async function getTokenAmount(amount: number) {
-      const decimals = await (await getContract(underlying, 'IERC20Metadata')).decimals();
-      const tokenAmount = getBigNumber(amount, decimals);
-      return tokenAmount;
-    }
+    shouldBehaveLikeErc20AdapterInitialize()
 
-    async function getTokens(amount: number) {
-      const tokenAmount = await getTokenAmount(amount);
-      await sendTokenTo(underlying, wallet.address, tokenAmount);
-      return tokenAmount;
-    }
-  
-    describe('settings', () => {
-      it('name()', async () => {
-        expect(await adapter.name()).to.eq(`Aave V2 ${symbol} Adapter`);
-      })
-  
-      it('token()', async () => {
-        expect(await adapter.token()).to.eq(aToken.address);
-      })
-  
-      it('underlying()', async () => {
-        expect(await adapter.underlying()).to.eq(token.address);
-      })
-    })
-  
-    describe('deposit()', () => {
-      it('Should revert if caller has insufficient balance', async () => {
-        await expect(adapter.connect(wallet1).deposit(getBigNumber(1))).to.be.revertedWith('TH:STF')
-      })
-  
-      it('Should mint aToken for user module', async () => {
-        const tx = adapter.deposit(amountMinted.div(2));
-        await expect(tx)
-          .to.emit(token, 'Transfer')
-          .withArgs(wallet.address, userModule, amountMinted.div(2))
-        expect(await token.balanceOf(wallet.address)).to.eq(amountMinted.div(2));
-        expect(await aToken.balanceOf(userModule)).to.eq(amountMinted.div(2));
-      })
+    shouldBehaveLikeErc20AdapterQueries()
 
-      it('If token is incentivized, should claim stkAave and begin cooldown after first deposit', async () => {
-        if ((await incentives.getAssetData(aToken.address)).emissionPerSecond.gt(0)) {
+    describe('deposit()', function () {
+      shouldBehaveLikeErc20AdapterDeposit()
+
+      it('If token is incentivized, should claim stkAave and begin cooldown after first deposit', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          await this.adapter.deposit(this.amountDeposited.div(2));
           await advanceTimeAndBlock(60)
-          expect(await incentives.getRewardsBalance([aToken.address], userModule)).to.be.gt(0);
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.be.gt(0);
           expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
-          await adapter.deposit(amountMinted.div(2));
-          expect(await incentives.getRewardsBalance([aToken.address], userModule)).to.eq(0);
+          await this.adapter.deposit(this.amountDeposited.div(2));
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.eq(0);
           expect(await stkAave.stakersCooldowns(userModule)).to.eq(await latest())
-        } else {
-          await adapter.deposit(amountMinted.div(2));
         }
       })
 
-      it('If token is incentivized, should claim Aave for user when cooldown is over', async () => {
-        if ((await incentives.getAssetData(aToken.address)).emissionPerSecond.gt(0)) {
-          let amount = await getTokens(1);
-          expect(await aave.balanceOf(wallet2.address)).to.eq(0)
-          await token.transfer(wallet2.address, amount)
-          await token.connect(wallet2).approve(adapter.address, constants.MaxUint256)
-          await adapter.connect(wallet2).deposit(amount.div(3))
+      it('If token is incentivized, should claim Aave for user when cooldown is over', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          let amount = await this.getTokens(1);
+          expect(await aave.balanceOf(this.wallet2.address)).to.eq(0)
+          await this.underlying.transfer(this.wallet2.address, amount)
+          await this.underlying.connect(this.wallet2).approve(this.adapter.address, constants.MaxUint256)
+          await this.adapter.connect(this.wallet2).deposit(amount.div(3))
           await advanceTimeAndBlock(60)
-          await adapter.connect(wallet2).deposit(amount.div(3))
+          await this.adapter.connect(this.wallet2).deposit(amount.div(3))
           await advanceTimeAndBlock(864001)
-          await adapter.connect(wallet2).deposit(amount.div(3))
-          expect(await aave.balanceOf(wallet2.address)).to.be.gt(0)
-          await aave.connect(wallet2).transfer(wallet1.address, await aave.balanceOf(wallet2.address))
+          await this.adapter.connect(this.wallet2).deposit(amount.div(3))
+          expect(await aave.balanceOf(this.wallet2.address)).to.be.gt(0)
+          await aave.connect(this.wallet2).transfer(this.wallet1.address, await aave.balanceOf(this.wallet2.address))
         }
       })
     })
   
-    describe('balanceWrapped()', () => {
-      it('Should return caller balance in aToken', async () => {
-        expect(await adapter.balanceWrapped()).to.be.gte(amountMinted);
-        expect(await adapter.connect(wallet1).balanceWrapped()).to.eq(0);
-      })
-    })
-  
-    describe('balanceUnderlying()', () => {
-      it('Should return caller balance in aToken (aToken convertible 1:1)', async () => {
-        expect(await adapter.balanceUnderlying()).to.be.gte(amountMinted);
-        expect(await adapter.connect(wallet1).balanceUnderlying()).to.eq(0);
-      })
-    })
-  
-    describe('getHypotheticalAPR()', () => {
-      it('Positive should decrease APR', async () => {
-        const apr = await adapter.getAPR();
-        if (apr.gt(0)) {
-          expect(await adapter.getHypotheticalAPR(await getTokenAmount(1))).to.be.lt(apr);
-        }
-      })
-  
-      it('Negative should increase APR', async () => {
-        const apr = await adapter.getAPR();
-        if (apr.gt(0)) {
-          const bal = await token.balanceOf(aToken.address);
-          expect(await adapter.getHypotheticalAPR(bal.div(10).mul(-1))).to.be.gt(apr);
-        }
-      })
-    })
-  
-    describe('withdraw()', () => {
-      it('Should revert if caller has insufficient balance', async () => {
-        await expect(adapter.connect(wallet1).withdraw(getBigNumber(1))).to.be.revertedWith('TH:STF')
-      })
-  
-      it('Should burn aToken and redeem underlying', async () => {
-        const balance = await aToken.balanceOf(userModule);
-        await expect(adapter.withdraw(balance))
-          .to.emit(token, 'Transfer')
-          .withArgs(aToken.address, wallet.address, balance)
-        expect(await token.balanceOf(wallet.address)).to.eq(balance);
-      })
-    })
+    describe('withdraw()', function () {
+      shouldBehaveLikeErc20AdapterWithdraw()
 
-    describe('withdrawAll()', () => {
-      before(async () => {
-        amountMinted = await getTokens(10)
-        await adapter.deposit(amountMinted);
+      it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          // await this.adapter.deposit(this.amountDeposited.div(2));
+          await advanceTimeAndBlock(60)
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.be.gt(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
+          await this.adapter.withdraw(await this.adapter.balanceWrapped({ blockTag: 'pending' }));
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.eq(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(await latest())
+        }
       })
-  
-      it('Should burn all caller aToken and redeem underlying', async () => {
-        const balance = await aToken.balanceOf(wallet.address);
-        await adapter.withdrawAll();
-        expect(await token.balanceOf(userModule)).to.be.gte(balance);
-        expect(await aToken.balanceOf(userModule)).to.eq(0);
+
+      it('If token is incentivized, should claim Aave for user when cooldown is over', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          await advanceTimeAndBlock(60)
+          const amount = await this.adapter.balanceWrapped({ blockTag: 'pending' })
+          await this.adapter.withdraw(amount.div(2))
+          await advanceTimeAndBlock(864001)
+          await this.adapter.withdraw(amount.div(2))
+          expect(await aave.balanceOf(this.wallet.address)).to.be.gt(0)
+        }
       })
     })
-  });
+  
+    describe('withdrawUnderlying()', function () {
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
+
+      it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          // await this.adapter.deposit(this.amountDeposited.div(2));
+          await advanceTimeAndBlock(60)
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.be.gt(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
+          await this.adapter.withdrawUnderlying(await this.adapter.balanceUnderlying({ blockTag: 'pending' }));
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.eq(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(await latest())
+        }
+      })
+
+      it('If token is incentivized, should claim Aave for user when cooldown is over', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          await advanceTimeAndBlock(60)
+          const amount = await this.adapter.balanceUnderlying({ blockTag: 'pending' })
+          await this.adapter.withdrawUnderlying(amount.div(2))
+          await advanceTimeAndBlock(864001)
+          await this.adapter.withdrawUnderlying(amount.div(2))
+          expect(await aave.balanceOf(this.wallet.address)).to.be.gt(0)
+        }
+      })
+    })
+  
+    describe('withdrawUnderlyingUpTo()', function () {
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
+
+      it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          // await this.adapter.deposit(this.amountDeposited.div(2));
+          await advanceTimeAndBlock(60)
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.be.gt(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
+          await this.adapter.withdrawUnderlyingUpTo(await this.adapter.balanceUnderlying({ blockTag: 'pending' }));
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.eq(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(await latest())
+        }
+      })
+
+      it('If token is incentivized, should claim Aave for user when cooldown is over', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          await advanceTimeAndBlock(60)
+          const amount = await this.adapter.balanceUnderlying({ blockTag: 'pending' })
+          await this.adapter.withdrawUnderlyingUpTo(amount.div(2))
+          await advanceTimeAndBlock(864001)
+          await this.adapter.withdrawUnderlyingUpTo(amount.div(2))
+          expect(await aave.balanceOf(this.wallet.address)).to.be.gt(0)
+        }
+      })
+    })
+  
+    describe('withdrawAll()', function () {
+      shouldBehaveLikeErc20AdapterWithdrawAll()
+
+      it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          await advanceTimeAndBlock(60)
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.be.gt(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(0)
+          await this.adapter.withdrawAll();
+          expect(await incentives.getRewardsBalance([this.wrapper.address], userModule)).to.eq(0);
+          expect(await stkAave.stakersCooldowns(userModule)).to.eq(await latest())
+        }
+      })
+
+      it('If token is incentivized, should claim Aave for user when cooldown is over', async function () {
+        if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
+          await advanceTimeAndBlock(60)
+          await this.adapter.withdrawAll();
+          await this.adapter.deposit(await this.underlying.balanceOf(this.wallet.address))
+          await advanceTimeAndBlock(864001)
+          await this.adapter.withdrawAll();
+          expect(await aave.balanceOf(this.wallet.address)).to.be.gt(0)
+        }
+      })
+    })
+  })
 
   testAdapter(getAddress('0xdac17f958d2ee523a2206206994597c13d831ec7'), getAddress('0x3ed3b47dd13ec9a98b44e6204a523e766b225811'), 'USDT');
   testAdapter(getAddress('0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'), getAddress('0x9ff58f4ffb29fa2266ab25e75e2a8b3503311656'), 'WBTC');
@@ -199,4 +212,4 @@ describe('AaveV2Erc20Adapter', () => {
   testAdapter(getAddress('0xba100000625a3754423978a60c9317c58a424e3d'), getAddress('0x272f97b7a56a387ae942350bbc7df5700f8a4576'), 'BAL');
   testAdapter(getAddress('0x8798249c2e607446efb7ad49ec89dd1865ff4272'), getAddress('0xf256cc7847e919fac9b808cc216cac87ccf2f47a'), 'xSUSHI');
   testAdapter(getAddress('0xd5147bc8e386d91cc5dbe72099dac6c9b99276f5'), getAddress('0x514cd6756ccbe28772d4cb81bc3156ba9d1744aa'), 'renFIL');
-});
+})

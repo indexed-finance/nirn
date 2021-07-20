@@ -1,33 +1,114 @@
+import { expect } from 'chai'
+import { ethers } from 'hardhat'
 import { getAddress } from "@ethersproject/address"
-import { CErc20Adapter } from "../../typechain"
-import { behavesLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
-import { deployContract } from '../shared'
-import { CompoundConverter } from "../shared/conversion"
-
+import { IComptroller, IERC20, IErc20Adapter, TestComptrollerLens } from "../../typechain"
+import {
+  setupAdapterContext,
+  shouldBehaveLikeErc20AdapterDeposit,
+  shouldBehaveLikeErc20AdapterInitialize,
+  shouldBehaveLikeErc20AdapterQueries,
+  shouldBehaveLikeErc20AdapterWithdraw,
+  shouldBehaveLikeErc20AdapterWithdrawAll,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlying,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo
+} from "../Erc20AdapterBehavior.spec"
+import { advanceBlock, deployContract, getIERC20, CompoundConverter } from '../shared'
 
 describe('CErc20Adapter', () => {
-  let implementation: CErc20Adapter;
+  let comp: IERC20
 
-  before('Deploy implementation', async () => {
-    implementation = await deployContract('CErc20Adapter');
+  before(async () => {
+    comp = await getIERC20('0xc00e94cb662c3520282e6f5717214004a7f26888')
   })
 
-  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => behavesLikeErc20Adapter(
-    () => implementation,
-    async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
-    async (adapter, underlying, token) => underlying.balanceOf(token.address),
-    CompoundConverter,
-    _underlying,
-    _ctoken,
-    'Compound',
-    'c',
-    symbol
-  );
+  const getLens = () => deployContract<TestComptrollerLens>('TestComptrollerLens')
 
-  // Paused
-  // testAdapter(getAddress('0x1985365e9f78359a9b6ad760e32412f4a445e862'), getAddress('0x158079ee67fce2f58472a96584a73c7ab9ac95c1'), 'REP');
-  // testAdapter(getAddress('0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'), getAddress('0xc11b1268c1a384e55c48c2391d8d480264a3a7f4'), 'WBTC');
-  // testAdapter(getAddress('0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359'), getAddress('0xf5dce57282a584d2746faf1593d3121fcac444dc'), 'DAI');
+  const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`c${symbol}`, function () {
+    setupAdapterContext(
+      async () => (await deployContract('CErc20Adapter')) as IErc20Adapter,
+      async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
+      CompoundConverter,
+      _underlying,
+      _ctoken,
+      symbol,
+    )
+
+    shouldBehaveLikeErc20AdapterInitialize()
+
+    shouldBehaveLikeErc20AdapterQueries()
+
+    describe('deposit()', function () {
+      shouldBehaveLikeErc20AdapterDeposit()
+    })
+  
+    describe('withdraw()', function () {
+      shouldBehaveLikeErc20AdapterWithdraw()
+
+      it('Should claim COMP owed to caller if incentivized', async function () {
+        await this.resetTests(true)
+        const comptroller = (await ethers.getContractAt('IComptroller', '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B')) as IComptroller
+        if ((await comptroller.compSpeeds(this.wrapper.address)).gt(0)) {
+          await advanceBlock()
+          const expectedRewards = await (await getLens()).callStatic.getPendingRewards(this.wallet.address, this.wrapper.address, { blockTag: 'pending' })
+          expect(expectedRewards).to.be.gt(0)
+          await expect(this.adapter.withdraw(await this.wrapper.balanceOf(this.wallet.address)))
+            .to.emit(comp, 'Transfer')
+            .withArgs(comptroller.address, this.wallet.address, expectedRewards)
+        }
+      })
+    })
+  
+    describe('withdrawAll()', function () {
+      shouldBehaveLikeErc20AdapterWithdrawAll()
+
+      it('Should claim COMP owed to caller if incentivized', async function () {
+        await this.resetTests(true)
+        const comptroller = (await ethers.getContractAt('IComptroller', '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B')) as IComptroller
+        if ((await comptroller.compSpeeds(this.wrapper.address)).gt(0)) {
+          await advanceBlock()
+          const expectedRewards = await (await getLens()).callStatic.getPendingRewards(this.wallet.address, this.wrapper.address, { blockTag: 'pending' })
+          expect(expectedRewards).to.be.gt(0)
+          await expect(this.adapter.withdrawAll())
+            .to.emit(comp, 'Transfer')
+            .withArgs(comptroller.address, this.wallet.address, expectedRewards)
+        }
+      })
+    })
+  
+    describe('withdrawUnderlying()', function () {
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
+
+      it('Should claim COMP owed to caller if incentivized', async function () {
+        await this.resetTests(true)
+        const comptroller = (await ethers.getContractAt('IComptroller', '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B')) as IComptroller
+        if ((await comptroller.compSpeeds(this.wrapper.address)).gt(0)) {
+          await advanceBlock()
+          const expectedRewards = await (await getLens()).callStatic.getPendingRewards(this.wallet.address, this.wrapper.address, { blockTag: 'pending' })
+          expect(expectedRewards).to.be.gt(0)
+          await expect(this.adapter.withdrawUnderlying(await this.adapter.balanceUnderlying()))
+            .to.emit(comp, 'Transfer')
+            .withArgs(comptroller.address, this.wallet.address, expectedRewards)
+        }
+      })
+    })
+  
+    describe('withdrawUnderlyingUpTo()', function () {
+      shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo()
+
+      it('Should claim COMP owed to caller if incentivized', async function () {
+        await this.resetTests(true)
+        const comptroller = (await ethers.getContractAt('IComptroller', '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B')) as IComptroller
+        if ((await comptroller.compSpeeds(this.wrapper.address)).gt(0)) {
+          await advanceBlock()
+          const expectedRewards = await (await getLens()).callStatic.getPendingRewards(this.wallet.address, this.wrapper.address, { blockTag: 'pending' })
+          expect(expectedRewards).to.be.gt(0)
+          await expect(this.adapter.withdrawUnderlyingUpTo(await this.adapter.balanceUnderlying()))
+            .to.emit(comp, 'Transfer')
+            .withArgs(comptroller.address, this.wallet.address, expectedRewards)
+        }
+      })
+    })
+  })
 
   testAdapter(getAddress('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'), getAddress('0x39aa39c021dfbae8fac545936693ac917d5e7563'), 'USDC');
   testAdapter(getAddress('0xdac17f958d2ee523a2206206994597c13d831ec7'), getAddress('0xf650c3d88d12db855b8bf7d11be6c55a4e07dcc9'), 'USDT');

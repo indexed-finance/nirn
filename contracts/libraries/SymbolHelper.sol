@@ -59,4 +59,18 @@ library SymbolHelper {
     assembly { mstore(data, size) }
     return string(data);
   }
+
+  function getPrefixedSymbol(string memory prefix, address token) internal view returns (string memory prefixedSymbol) {
+    prefixedSymbol = string(abi.encodePacked(
+      prefix,
+      getSymbol(token)
+    ));
+  }
+
+  function getPrefixedName(string memory prefix, address token) internal view returns (string memory prefixedName) {
+    prefixedName = string(abi.encodePacked(
+      prefix,
+      getName(token)
+    ));
+  }
 }

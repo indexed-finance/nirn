@@ -46,15 +46,13 @@ abstract contract AbstractErc20Adapter {
     ));
   }
 
+  function availableLiquidity() public view virtual returns (uint256);
+
 /* ========== Conversion Queries ========== */
 
-  function toUnderlyingAmount(uint256 tokenAmount) public view virtual returns (uint256) {
-    return tokenAmount;
-  }
+  function toUnderlyingAmount(uint256 tokenAmount) external view virtual returns (uint256);
 
-  function toWrappedAmount(uint256 underlyingAmount) public view virtual returns (uint256) {
-    return underlyingAmount;
-  }
+  function toWrappedAmount(uint256 underlyingAmount) external view virtual returns (uint256);
 
 /* ========== Performance Queries ========== */
 
@@ -94,6 +92,14 @@ abstract contract AbstractErc20Adapter {
     require(amountUnderlying > 0, "withdraw 0");
     amountBurned = _burnUnderlying(amountUnderlying);
     underlying.safeTransfer(msg.sender, amountUnderlying);
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual returns (uint256 amountReceived) {
+    require(amountUnderlying > 0, "withdraw 0");
+    uint256 amountAvailable = availableLiquidity();
+    amountReceived = amountAvailable < amountUnderlying ? amountAvailable : amountUnderlying;
+    _burnUnderlying(amountReceived);
+    underlying.safeTransfer(msg.sender, amountReceived);
   }
 
 /* ========== Internal Actions ========== */

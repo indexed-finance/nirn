@@ -27,6 +27,12 @@ contract C1Erc20Adapter is AbstractErc20Adapter() {
     return "Compound";
   }
 
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
 /* ========== Conversion Queries ========== */
 
   function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {

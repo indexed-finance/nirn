@@ -56,6 +56,12 @@ contract AaveV2EtherAdapter is IEtherAdapter {
     ));
   }
 
+/* ========== Metadata ========== */
+
+  function availableLiquidity() public view override returns (uint256) {
+    return IERC20(underlying).balanceOf(token);
+  }
+
 /* ========== Conversion Queries ========== */
 
   function toUnderlyingAmount(uint256 tokenAmount) public pure override returns (uint256) {
@@ -104,18 +110,18 @@ contract AaveV2EtherAdapter is IEtherAdapter {
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
     address reserve = underlying;
     ILendingPool.ReserveData memory data = pool.getReserveData(reserve);
-    uint256 availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).add(liquidityDelta);
+    uint256 _availableLiquidity = IERC20(reserve).balanceOf(data.aTokenAddress).add(liquidityDelta);
     uint256 totalVariableDebt = data.variableDebtToken.scaledTotalSupply().rayMul(data.variableBorrowIndex);
     (uint256 totalStableDebt, uint256 avgStableRate) = data.stableDebtToken.getTotalSupplyAndAvgRate();
     (uint256 liquidityRate, ,) = data.interestRateStrategy.calculateInterestRates(
       reserve,
-      availableLiquidity,
+      _availableLiquidity,
       totalStableDebt,
       totalVariableDebt,
       avgStableRate,
       ReserveConfigurationLib.getReserveFactor(data.configuration)
     );
-    uint256 newLiquidity = availableLiquidity.add(totalVariableDebt).add(totalStableDebt);
+    uint256 newLiquidity = _availableLiquidity.add(totalVariableDebt).add(totalStableDebt);
     return (liquidityRate / 1e9).add(getRewardsAPR(newLiquidity));
   }
 
@@ -186,6 +192,13 @@ contract AaveV2EtherAdapter is IEtherAdapter {
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
     return withdraw(amountUnderlying);
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
+    require(amountUnderlying > 0, "withdraw 0");
+    uint256 amountAvailable = availableLiquidity();
+    amountReceived = amountAvailable < amountUnderlying ? amountAvailable : amountUnderlying;
+    withdraw(amountReceived);
   }
 
   function withdrawUnderlyingAsETH(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {

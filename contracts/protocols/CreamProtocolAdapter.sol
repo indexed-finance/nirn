@@ -1,88 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
+pragma abicoder v2;
 
 import "../interfaces/CompoundInterfaces.sol";
-import "../interfaces/IAdapterRegistry.sol";
 import "../adapters/cream/CrErc20Adapter.sol";
 import "../adapters/cream/CrEtherAdapter.sol";
-import "../libraries/CloneLibrary.sol";
+import "./AbstractProtocolAdapter.sol";
 
 
-// @todo Add freezing & unfreezing of adapters and tokens
-contract CreamProtocolAdapter {
-  address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+contract CreamProtocolAdapter is AbstractProtocolAdapter {
+  using CloneLibrary for address;
+
+/* ========== Constants ========== */
+
   IComptroller public constant comptroller = IComptroller(0x3d5BC3c8d13dcB8bF317092d84783c2697AE9258);
-  IAdapterRegistry public immutable registry;
   address public immutable erc20AdapterImplementation;
   address public immutable etherAdapterImplementation;
 
-  string public protocol = "Cream";
-  uint256 public totalMapped;
-  address[] public adapters;
-  address[] public frozen;
+/* ========== Constructor ========== */
 
-  constructor(IAdapterRegistry _registry) {
-    registry = _registry;
+  constructor(IAdapterRegistry _registry) AbstractProtocolAdapter(_registry) {
     erc20AdapterImplementation = address(new CrErc20Adapter());
     etherAdapterImplementation = address(new CrEtherAdapter());
   }
 
-  function getUnmapped() public view returns (ICToken[] memory cTokens) {
-    cTokens = comptroller.getAllMarkets();
-    uint256 len = cTokens.length;
-    uint256 prevLen = totalMapped;
-    if (len == prevLen) {
-      assembly { mstore(cTokens, 0) }
-    } else {
-      assembly {
-        cTokens := add(cTokens, mul(prevLen, 32))
-        mstore(cTokens, sub(len, prevLen))
-      }
-    }
-  }
+/* ========== Internal Actions ========== */
 
-  function unfreeze(uint256 i) external {
-    ICToken cToken = ICToken(frozen[i]);
-    require(!comptroller.mintGuardianPaused(address(cToken)), "Asset frozen");
-    (, address adapter) = deployAdapter(cToken);
-    registry.addTokenAdapter(adapter);
-    adapters.push(adapter);
-    address last = frozen[frozen.length - 1];
-    if (address(cToken) == last) {
-      frozen.pop();
-    } else {
-      frozen[i] = last;
-      frozen.pop();
-    }
-  }
-
-  function map(uint256 max) external {
-    ICToken[] memory cTokens = getUnmapped();
-    uint256 len = cTokens.length;
-    if (max < len) {
-      len = max;
-    }
-    uint256 skipped;
-    address[] memory _adapters = new address[](len);
-    for (uint256 i = 0; i < len; i++) {
-      ICToken cToken = cTokens[i];
-      if (comptroller.mintGuardianPaused(address(cToken))) {
-        frozen.push(address(cToken));
-        skipped++;
-        continue;
-      }
-      (,_adapters[i - skipped]) = deployAdapter(cToken);
-    }
-    totalMapped += len;
-    assembly { if gt(skipped, 0) { mstore(_adapters, sub(mload(_adapters), skipped)) } }
-    registry.addTokenAdapters(_adapters);
-  }
-
-  function deployAdapter(ICToken cToken) internal returns (address underlying, address adapter) {
+  function deployAdapter(address cToken) internal virtual override returns (address adapter) {
+    address underlying;
     // The call to underlying will use all the gas sent if it fails,
     // so we specify a maximum of 25k gas. The contract will only use ~2k
     // but this protects against all likely changes to the gas schedule.
-    try cToken.underlying{gas: 25000}() returns (address _underlying) {
+    try ICToken(cToken).underlying{gas: 25000}() returns (address _underlying) {
       underlying = _underlying;
       if (underlying == address(0)) {
         underlying = weth;
@@ -96,5 +45,48 @@ contract CreamProtocolAdapter {
       adapter = CloneLibrary.createClone(erc20AdapterImplementation);
     }
     CrErc20Adapter(adapter).initialize(underlying, address(cToken));
+  }
+
+/* ========== Public Queries ========== */
+
+  function protocol() external pure virtual override returns (string memory) {
+    return "Cream";
+  }
+
+  function getUnmapped() public view virtual override returns (address[] memory cTokens) {
+    cTokens = toAddressArray(comptroller.getAllMarkets());
+    uint256 len = cTokens.length;
+    uint256 prevLen = totalMapped;
+    if (len == prevLen) {
+      assembly { mstore(cTokens, 0) }
+    } else {
+      assembly {
+        cTokens := add(cTokens, mul(prevLen, 32))
+        mstore(cTokens, sub(len, prevLen))
+      }
+    }
+  }
+
+  function toAddressArray(ICToken[] memory cTokens) internal pure returns (address[] memory arr) {
+    assembly { arr := cTokens }
+  }
+
+/* ========== Internal Queries ========== */
+
+  function isAdapterMarketFrozen(address adapter) internal view virtual override returns (bool) {
+    return comptroller.mintGuardianPaused(IErc20Adapter(adapter).token());
+  }
+
+  function isTokenMarketFrozen(address cToken) internal view virtual override returns (bool) {
+    // Return true if market is paused in comptroller
+    bool isFrozen = comptroller.mintGuardianPaused(cToken);
+    if (isFrozen) return true;
+    // Return true if market is for an SLP token, which the adapter can not handle.
+    try ICToken(cToken).sushi() returns (address) {
+      return true;
+    } catch {
+      // Return true is supply is 0.
+      return IERC20(cToken).totalSupply() == 0;
+    }
   }
 }

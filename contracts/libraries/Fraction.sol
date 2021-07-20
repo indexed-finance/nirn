@@ -13,6 +13,10 @@ library Fraction {
     return a.mul(fraction) / ONE_E18;
   }
 
+  function mulSubFractionE18(uint256 a, uint256 fraction) internal pure returns (uint256) {
+    return a.sub(a.mul(fraction) / ONE_E18);
+  }
+
   function toFractionE18(uint256 a, uint256 b) internal pure returns (uint256) {
     return a.mul(ONE_E18) / b;
   }
