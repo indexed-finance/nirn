@@ -9,16 +9,31 @@ import "../libraries/MinimalSignedMath.sol";
 import "../libraries/ArrayHelper.sol";
 import "../libraries/DynamicArrays.sol";
 import "../libraries/Fraction.sol";
+import "../libraries/SafeCast.sol";
 
 
 library AdapterHelper {
   using Fraction for uint256;
   using LowGasSafeMath for uint256;
-  using MinimalSignedMath for uint256;
   using MinimalSignedMath for int256;
+  using SafeCast for uint256;
+  using SafeCast for int256;
   using ArrayHelper for address[];
   using ArrayHelper for uint256[];
   using DynamicArrays for uint256[];
+
+  function packAdapterAndWeight(
+    IErc20Adapter adapter,
+    uint256 weight
+  )
+    internal
+    pure
+    returns (bytes32 encoded)
+  {
+    assembly {
+      encoded := or(shl(96, adapter), weight)
+    }
+  }
 
   function packAdaptersAndWeights(
     IErc20Adapter[] memory adapters,
@@ -129,7 +144,7 @@ library AdapterHelper {
     excludedAdapterIndices = DynamicArrays.dynamicUint256Array(selfLen);
     for (uint256 i; i < selfLen; i++) {
       IErc20Adapter element = oldAdapters[i];
-      for (uint256 j = i; j < otherLen; j++) {
+      for (uint256 j; j < otherLen; j++) {
         if (element == newAdapters[j]) {
           element = IErc20Adapter(0);
           break;
@@ -156,11 +171,12 @@ library AdapterHelper {
   function rebalance(
     IErc20Adapter[] memory adapters,
     uint256[] memory weights,
-    int256[] memory liquidityDeltas
+    int256[] memory liquidityDeltas,
+    uint256 reserveBalance
   ) internal returns (uint256[] memory removedIndices) {
     uint256 len = liquidityDeltas.length;
     removedIndices = DynamicArrays.dynamicUint256Array(len);
-    uint256 totalAvailableBalance;
+    uint256 totalAvailableBalance = reserveBalance;
     // Execute withdrawals first
     for (uint256 i; i < len; i++) {
       int256 delta = liquidityDeltas[i];
@@ -181,9 +197,11 @@ library AdapterHelper {
     for (uint256 i; i < len; i++) {
       int256 delta = liquidityDeltas[i];
       if (delta > 0) {
+        if (totalAvailableBalance == 0) break;
         uint256 amountToDeposit = delta.toUint256();
-        if (amountToDeposit < totalAvailableBalance) {
-          amountToDeposit = totalAvailableBalance;
+        if (amountToDeposit >= totalAvailableBalance) {
+          IErc20Adapter(adapters[i]).deposit(totalAvailableBalance);
+          break;
         }
         IErc20Adapter(adapters[i]).deposit(amountToDeposit);
         totalAvailableBalance = totalAvailableBalance.sub(amountToDeposit);
