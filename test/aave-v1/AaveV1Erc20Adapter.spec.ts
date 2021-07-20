@@ -11,7 +11,8 @@ describe('AaveV1Erc20Adapter', () => {
       async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
       AaveV1Converter,
       _underlying,
-      _ctoken
+      _ctoken,
+      symbol,
     )
   })
 

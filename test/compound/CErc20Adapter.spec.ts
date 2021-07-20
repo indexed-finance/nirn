@@ -29,7 +29,8 @@ describe('CErc20Adapter', () => {
       async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
       CompoundConverter,
       _underlying,
-      _ctoken
+      _ctoken,
+      symbol,
     )
 
     shouldBehaveLikeAdapterInitialize()

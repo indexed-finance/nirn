@@ -12,7 +12,8 @@ describe('C1Erc20Adapter', () => {
       async (adapter, underlying, token) => (adapter as C1Erc20Adapter).initialize(underlying.address, token.address),
       CompoundConverter,
       _underlying,
-      _ctoken
+      _ctoken,
+      symbol,
     );
   })
 

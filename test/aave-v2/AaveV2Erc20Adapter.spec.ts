@@ -32,6 +32,7 @@ describe('AaveV2Erc20Adapter', function () {
       AaveV2Converter,
       underlying,
       atoken,
+      symbol,
       async (adapter, underlying, wrapper) => {
         userModule = await getNextContractAddress(adapter.address)
         return {
