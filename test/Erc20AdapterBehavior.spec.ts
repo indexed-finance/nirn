@@ -207,7 +207,11 @@ export function shouldBehaveLikeAdapterQueries() {
     it('Increases by amount deposited', async function () {
       const liquidity = await this.adapter.availableLiquidity()
       await this.adapter.deposit(this.amountDeposited)
-      expect(await this.adapter.availableLiquidity()).to.eq(liquidity.add(this.amountDeposited))
+      const diff = relativeDiff(
+        await this.adapter.availableLiquidity(),
+        liquidity.add(this.amountDeposited)
+      )
+      expect(diff).to.be.lt(0.00000001)
     })
   
     it('Decreases by amount withdrawn', async function () {
