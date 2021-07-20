@@ -6,46 +6,63 @@ import "../interfaces/FulcrumInterfaces.sol";
 import "../adapters/fulcrum/FulcrumErc20Adapter.sol";
 import "../adapters/fulcrum/FulcrumEtherAdapter.sol";
 import "../interfaces/IAdapterRegistry.sol";
-import "../libraries/CloneLibrary.sol";
+import "./AbstractProtocolAdapter.sol";
 
 
-contract FulcrumProtocolAdapter {
-  address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+contract FulcrumProtocolAdapter is AbstractProtocolAdapter {
+
+/* ========== Constants ========== */
+
   IBZX public constant bzx = IBZX(0xD8Ee69652E4e4838f2531732a46d1f7F584F0b7f);
-  IAdapterRegistry public immutable registry;
   address public immutable erc20AdapterImplementation;
 
-  string public protocol = "Fulcrum";
-  uint256 public totalMapped = 2;
+/* ========== Constructor ========== */
 
-  constructor(IAdapterRegistry _registry) {
-    registry = _registry;
+  constructor(IAdapterRegistry _registry) AbstractProtocolAdapter(_registry) {
     address _erc20AdapterImplementation = address(new FulcrumErc20Adapter());
     erc20AdapterImplementation = _erc20AdapterImplementation;
+
     address[] memory loanPoolsZeroAndOne = bzx.getLoanPoolsList(0, 2);
     address underlying0 = bzx.loanPoolToUnderlying(loanPoolsZeroAndOne[0]);
     address adapter0 = CloneLibrary.createClone(_erc20AdapterImplementation);
     FulcrumErc20Adapter(adapter0).initialize(underlying0, loanPoolsZeroAndOne[0]);
+
     _registry.addTokenAdapter(adapter0);
     _registry.addTokenAdapter(address(new FulcrumEtherAdapter(weth, loanPoolsZeroAndOne[1])));
+
+    totalMapped = 2;
   }
 
-  function getUnmapped() external view returns (address[] memory loanPools) {
+/* ========== Internal Actions ========== */
+
+  function deployAdapter(address loanPool) internal virtual override returns (address adapter) {
+    address underlying = bzx.loanPoolToUnderlying(loanPool);
+    adapter = CloneLibrary.createClone(erc20AdapterImplementation);
+    FulcrumErc20Adapter(adapter).initialize(underlying, loanPool);
+  }
+
+/* ========== Public Queries ========== */
+
+  function protocol() external pure virtual override returns (string memory) {
+    return "Fulcrum";
+  }
+
+  function getUnmapped() public view virtual override returns (address[] memory loanPools) {
     loanPools = bzx.getLoanPoolsList(totalMapped, 1e18);
   }
 
-  function map(uint256 max) external {
-    uint256 total = totalMapped;
-    address[] memory loanPools = bzx.getLoanPoolsList(total, max);
-    uint256 len = loanPools.length;
-    for (uint256 i = 0; i < len; i++) {
-      address loanPool = loanPools[i];
-      address underlying = bzx.loanPoolToUnderlying(loanPool);
-      address adapter = CloneLibrary.createClone(erc20AdapterImplementation);
-      FulcrumErc20Adapter(adapter).initialize(underlying, loanPool);
-      registry.addTokenAdapter(adapter);
-    }
-    totalMapped = total + len;
+  function getUnmappedUpTo(uint256 max) public view virtual override returns (address[] memory loanPools) {
+    loanPools = bzx.getLoanPoolsList(totalMapped, max);
+  }
+
+/* ========== Internal Queries ========== */
+
+  function isAdapterMarketFrozen(address adapter) internal view virtual override returns (bool) {
+    return isTokenMarketFrozen(IErc20Adapter(adapter).token());
+  }
+
+  function isTokenMarketFrozen(address loanPool) internal view virtual override returns (bool) {
+    return IERC20(loanPool).totalSupply() == 0;
   }
 }
 

@@ -1,55 +1,73 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
+pragma abicoder v2;
 
 import "../interfaces/FuseInterfaces.sol";
-import "../interfaces/IAdapterRegistry.sol";
-import "./FuseTokenAdapterFactory.sol";
+import "../adapters/fuse/FuseErc20Adapter.sol";
+import "../adapters/fuse/FuseEtherAdapter.sol";
+import "./AbstractProtocolAdapter.sol";
 
 
-contract FusePoolAdapter {
+contract FuseProtocolAdapter is AbstractProtocolAdapter {
+  using CloneLibrary for address;
+
+/* ========== Constants ========== */
+
   address public immutable fuseProtocolAdapter;
-  IAdapterRegistry public immutable registry;
-  FuseTokenAdapterFactory public immutable adapterFactory;
+  address public immutable erc20AdapterImplementation;
+  address public immutable etherAdapterImplementation;
+
+/* ========== Storage ========== */
 
   IFusePool public pool;
-  string public protocol;
-  uint256 public totalMapped;
-  address[] public frozen;
-  address[] public adapters;
+  string internal _fusePoolName;
 
-  constructor(
-    IAdapterRegistry _registry,
-    FuseTokenAdapterFactory _adapterFactory
-  ) {
-    registry = _registry;
-    adapterFactory = _adapterFactory;
+/* ========== Constructor ========== */
+
+  constructor(IAdapterRegistry _registry) AbstractProtocolAdapter(_registry) {
+    erc20AdapterImplementation = address(new FuseErc20Adapter());
+    etherAdapterImplementation = address(new FuseEtherAdapter());
     fuseProtocolAdapter = msg.sender;
-  }
-
-  function unfreeze(uint256 i) external {
-    IFToken fToken = IFToken(frozen[i]);
-    require(!pool.mintGuardianPaused(address(fToken)), "Asset frozen");
-    (, address adapter) = adapterFactory.deployAdapter(fToken, protocol);
-    registry.addTokenAdapter(adapter);
-    adapters.push(adapter);
-    address last = frozen[frozen.length - 1];
-    if (address(fToken) == last) {
-      frozen.pop();
-    } else {
-      frozen[i] = last;
-      frozen.pop();
-    }
   }
 
   function initialize(IFusePool _pool, string memory fusePoolName) external {
     require(msg.sender == fuseProtocolAdapter, "!fuse adapter");
     require(address(pool) == address(0), "already initialized");
     pool = _pool;
-    protocol = fusePoolName;
+    _fusePoolName = fusePoolName;
   }
 
-  function getUnmapped() public view returns (IFToken[] memory fTokens) {
-    fTokens = pool.getAllMarkets();
+/* ========== Internal Actions ========== */
+
+  function deployAdapter(address fToken) internal virtual override returns (address adapter) {
+    address underlying;
+    // The call to underlying will use all the gas sent if it fails,
+    // so we specify a maximum of 25k gas. The contract will only use ~2k
+    // but this protects against all likely changes to the gas schedule.
+    try IFToken(fToken).underlying{gas: 25000}() returns (address _underlying) {
+      underlying = _underlying;
+      if (underlying == address(0)) {
+        underlying = weth;
+      }
+    } catch {
+      underlying = weth;
+    }
+    if (underlying == weth) {
+      adapter = CloneLibrary.createClone(etherAdapterImplementation);
+    } else {
+      adapter = CloneLibrary.createClone(erc20AdapterImplementation);
+    }
+    FuseErc20Adapter(adapter).initialize(underlying, fToken, _fusePoolName);
+  }
+
+/* ========== Public Queries ========== */
+
+  function protocol() external view virtual override returns (string memory) {
+    return _fusePoolName;
+  }
+
+  function getUnmapped() public view virtual override returns (address[] memory fTokens) {
+    fTokens = toAddressArray(pool.getAllMarkets());
     uint256 len = fTokens.length;
     uint256 prevLen = totalMapped;
     if (len == prevLen) {
@@ -62,26 +80,17 @@ contract FusePoolAdapter {
     }
   }
 
-  function map(uint256 max) external {
-    IFToken[] memory fTokens = getUnmapped();
-    uint256 len = fTokens.length;
-    if (max < len) {
-      len = max;
-    }
-    string memory fusePoolName = protocol;
-    uint256 skipped;
-    address[] memory _adapters = new address[](len);
-    for (uint256 i = 0; i < len; i++) {
-      IFToken fToken = fTokens[i];
-      if (pool.mintGuardianPaused(address(fToken))) {
-        frozen.push(address(fToken));
-        skipped++;
-        continue;
-      }
-      (,_adapters[i - skipped]) = adapterFactory.deployAdapter(fToken, fusePoolName);
-    }
-    totalMapped += len;
-    assembly { if gt(skipped, 0) { mstore(_adapters, sub(mload(_adapters), skipped)) } }
-    registry.addTokenAdapters(_adapters);
+  function toAddressArray(IFToken[] memory fTokens) internal pure returns (address[] memory arr) {
+    assembly { arr := fTokens }
+  }
+
+/* ========== Internal Queries ========== */
+
+  function isAdapterMarketFrozen(address adapter) internal view virtual override returns (bool) {
+    return isTokenMarketFrozen(IErc20Adapter(adapter).token());
+  }
+
+  function isTokenMarketFrozen(address fToken) internal view virtual override returns (bool) {
+    return pool.mintGuardianPaused(fToken);
   }
 }
