@@ -30,6 +30,9 @@ interface ICToken {
   function redeem(uint256 tokenAmount) external returns (uint256);
   function redeemUnderlying(uint256 underlyingAmount) external returns (uint256);
   function borrow(uint borrowAmount) external returns (uint);
+
+  // Used to check if a cream market is for an SLP token
+  function sushi() external view returns (address);
 }
 
 
