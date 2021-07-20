@@ -55,7 +55,7 @@ library RebalanceValidation {
       IErc20Adapter adapter = adapters[i];
       require(registry.isApprovedAdapter(address(adapter)), "!approved");
       require(adapter.underlying() == underlying, "bad adapter");
-      for (uint256 j = i; j < len; j++) {
+      for (uint256 j = i + 1; j < len; j++) {
         require(address(adapter) != address(adapters[j]), "duplicate adapter");
       }
       uint256 weight = weights[i];
