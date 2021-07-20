@@ -10,6 +10,16 @@ import "../libraries/ArrayHelper.sol";
 abstract contract AbstractProtocolAdapter {
   using ArrayHelper for address[];
 
+/* ========== Events ========== */
+
+  event MarketFrozen(address token);
+
+  event MarketUnfrozen(address token);
+
+  event AdapterFrozen(address adapter);
+
+  event AdapterUnfrozen(address adapter);
+
 /* ========== Constants ========== */
 
   /**
@@ -60,6 +70,7 @@ abstract contract AbstractProtocolAdapter {
       if (isTokenMarketFrozen(token)) {
         skipped++;
         frozenTokens.push(token);
+        emit MarketFrozen(token);
         continue;
       }
       address adapter = deployAdapter(token);
@@ -79,6 +90,7 @@ abstract contract AbstractProtocolAdapter {
     require(!isAdapterMarketFrozen(adapter), "Market still frozen");
     frozenAdapters.remove(index);
     registry.addTokenAdapter(adapter);
+    emit AdapterUnfrozen(adapter);
   }
 
   /**
@@ -91,6 +103,7 @@ abstract contract AbstractProtocolAdapter {
     frozenTokens.remove(index);
     address adapter = deployAdapter(token);
     registry.addTokenAdapter(adapter);
+    emit MarketUnfrozen(token);
   }
 
   /**
@@ -102,6 +115,7 @@ abstract contract AbstractProtocolAdapter {
     require(isAdapterMarketFrozen(adapter), "Market not frozen");
     frozenAdapters.push(adapter);
     registry.removeTokenAdapter(adapter);
+    emit AdapterFrozen(adapter);
   }
 
 /* ========== Internal Actions ========== */

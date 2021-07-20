@@ -78,6 +78,14 @@ contract CreamProtocolAdapter is AbstractProtocolAdapter {
   }
 
   function isTokenMarketFrozen(address cToken) internal view virtual override returns (bool) {
-    return comptroller.mintGuardianPaused(cToken);
+    // Return true if market is paused in comptroller
+    bool isFrozen = comptroller.mintGuardianPaused(cToken);
+    if (isFrozen) return true;
+    // Return true if market is for an SLP token, which the adapter can not handle.
+    try ICToken(cToken).sushi() returns (address) {
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

@@ -13,6 +13,16 @@ contract DyDxProtocolAdapter {
   using ArrayHelper for address[];
   using CloneLibrary for address;
 
+/* ========== Events ========== */
+
+  event MarketFrozen(address token);
+
+  event MarketUnfrozen(address token);
+
+  event AdapterFrozen(address adapter);
+
+  event AdapterUnfrozen(address adapter);
+
 /* ========== Constants ========== */
 
   IDyDx public constant dydx = IDyDx(0x1E0447b19BB6EcFdAe1e4AE1694b0C3659614e4e);
@@ -57,6 +67,7 @@ contract DyDxProtocolAdapter {
       ) {
         frozenMarkets.push(DyDxMarket(underlying, marketId));
         skipped++;
+        emit MarketFrozen(underlying);
         continue;
       }
       address adapter = deployAdapter(underlying, marketId);
@@ -73,6 +84,7 @@ contract DyDxProtocolAdapter {
     require(!isTokenMarketFrozen(marketId), "Market not frozen");
     frozenAdapters.remove(index);
     registry.addTokenAdapter(address(adapter));
+    emit AdapterUnfrozen(address(adapter));
   }
 
   function unfreezeToken(uint256 index) external {
@@ -82,6 +94,7 @@ contract DyDxProtocolAdapter {
     removeMarket(index);
     address adapter = deployAdapter(market.underlying, marketId);
     registry.addTokenAdapter(address(adapter));
+    emit MarketUnfrozen(market.underlying);
   }
 
   function freezeAdapter(address adapterAddress) external {
@@ -90,6 +103,7 @@ contract DyDxProtocolAdapter {
     require(isTokenMarketFrozen(marketId), "Market not frozen");
     frozenAdapters.push(adapterAddress);
     registry.removeTokenAdapter(adapterAddress);
+    emit AdapterUnfrozen(address(adapter));
   }
 
 /* ========== Internal Actions ========== */
