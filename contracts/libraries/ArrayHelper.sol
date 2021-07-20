@@ -10,15 +10,28 @@ library ArrayHelper {
   using EnumerableSet for EnumerableSet.AddressSet;
   using LowGasSafeMath for uint256;
 
+/* ========== Type Cast ========== */
+
   /**
-   * @dev Converts an enumerable address set to an address array.
-   * The enumerable set library stores the values as a bytes32 array.
-   * This function re-assigns the pointer to an address array.
+   * @dev Cast an enumerable address set as an address array.
+   * The enumerable set library stores the values as a bytes32 array, this function
+   * casts it as an address array with a pointer assignment.
    */
   function toArray(EnumerableSet.AddressSet storage set) internal view returns (address[] memory arr) {
     bytes32[] memory bytes32Arr = set._inner._values;
     assembly { arr := bytes32Arr }
   }
+
+  /**
+   * @dev Cast an array of IErc20Adapter to an array of address using a pointer assignment.
+   * Note: The resulting array is the same as the original, so all changes to one will be
+   * reflected in the other.
+   */
+  function toAddressArray(IErc20Adapter[] memory _arr) internal pure returns (address[] memory arr) {
+    assembly { arr := _arr }
+  }
+
+/* ========== Math ========== */
 
   /**
    * @dev Computes the sum of a uint256 array.
@@ -27,6 +40,8 @@ library ArrayHelper {
     uint256 len = arr.length;
     for (uint256 i; i < len; i++) _sum = _sum.add(arr[i]);
   }
+
+/* ========== Removal ========== */
 
   /**
    * @dev Remove the element at `index` from an array and decrement its length.
@@ -102,6 +117,8 @@ library ArrayHelper {
     arr.pop();
   }
 
+/* ========== Search ========== */
+
   /**
    * @dev Find the index of an address in an array.
    * If the address is not found, revert.
@@ -113,7 +130,19 @@ library ArrayHelper {
   }
 
   /**
+   * @dev Determine whether an element is included in an array.
+   */
+  function includes(address[] memory arr, address find) internal pure returns (bool) {
+    uint256 len = arr.length;
+    for (uint256 i; i < len; i++) if (arr[i] == find) return true;
+    return false;
+  }
+
+/* ========== Sorting ========== */
+
+  /**
    * @dev Given an array of tokens and scores, sort by scores in descending order.
+   * Maintains the relationship between elements of each array at the same index.
    */
   function sortByDescendingScore(
     address[] memory addresses,
