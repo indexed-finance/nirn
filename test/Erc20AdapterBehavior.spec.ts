@@ -1,9 +1,14 @@
 import { expect } from 'chai'
 import { BigNumber, constants, Contract, ContractTransaction } from 'ethers'
 import { waffle } from 'hardhat'
-import { getContract, sendTokenTo, getBigNumber, deployClone, parseTokenAmount, resetFork, sendTokenToFrom, getTokenSymbol, getTokenDecimals } from './shared'
+import { getContract, sendTokenTo, getBigNumber, deployClone, resetFork, sendTokenToFrom, getTokenSymbol, getTokenDecimals, sendEtherTo, createSnapshot } from './shared'
 import { ConvertHelper } from './shared/conversion'
 import { IERC20, IErc20Adapter } from '../typechain'
+import { formatEther } from '@ethersproject/units'
+
+function relativeDiff(a: BigNumber, b: BigNumber) {
+  return parseFloat(formatEther(a.sub(b).abs().mul(getBigNumber(1)).div(b)));
+}
 
 export const setupAdapterContext = (
   getImplementation: () => Promise<IErc20Adapter>,
@@ -11,6 +16,7 @@ export const setupAdapterContext = (
   converter: ConvertHelper,
   _underlying: string,
   _wrapper: string,
+  symbol: string,
   transferAddressOverrides?: (adapter: IErc20Adapter, underlying: IERC20, token: IERC20) => Promise<{
     depositSenderWrapped?: string
     depositReceiverWrapped?: string
@@ -18,12 +24,24 @@ export const setupAdapterContext = (
     withdrawalSenderUnderlying?: string
   }>
 ) => {
+  let restoreSnapshot: () => Promise<void>
+  let completeReset: () => Promise<void>
+
+  after(async function () {
+    await completeReset()
+  })
+
   before(async function () {
     [this.wallet, this.wallet1, this.wallet2] = waffle.provider.getWallets()
+    completeReset = await createSnapshot()
+    this.symbol = symbol
+    this.initialize = initialize
+    this.getImplementation = getImplementation
     this.underlying = await getContract(_underlying, 'IERC20')
     this.wrapper = await getContract(_wrapper, 'IERC20')
     this.decimals = await getTokenDecimals(this.underlying)
     this.converter = converter
+
     this.toUnderlying = (amount: BigNumber) => this.converter.toUnderlying(this.wrapper, amount)
     this.toWrapped = (amount: BigNumber, withdrawUnderlying?: boolean) => this.converter.toWrapped(this.wrapper, amount, withdrawUnderlying)
     this.getTokenAmount = (n) => getBigNumber(n, this.decimals)
@@ -32,19 +50,21 @@ export const setupAdapterContext = (
       await sendTokenTo(_underlying, this.wallet.address, tokenAmount)
       return tokenAmount
     }
+
+    this.adapter = await deployClone(await getImplementation())
+    await initialize(this.adapter, this.underlying, this.wrapper)
+    await this.underlying.approve(this.adapter.address, constants.MaxUint256)
+    await this.wrapper.approve(this.adapter.address, constants.MaxUint256)
+
+    const overrides = transferAddressOverrides ? await transferAddressOverrides(this.adapter, this.underlying, this.wrapper) : {};
+    this.depositSenderWrapped = overrides.depositSenderWrapped || this.adapter.address
+    this.depositReceiverWrapped = overrides.depositReceiverWrapped || this.wallet.address
+    this.depositReceiverUnderlying = overrides.depositReceiverUnderlying || this.adapter.address
+    this.withdrawalSenderUnderlying = overrides.withdrawalSenderUnderlying || this.adapter.address
+
+    restoreSnapshot = await createSnapshot()
     this.resetTests = async (deposit?: boolean) => {
-      this.initialize = initialize
-      this.getImplementation = getImplementation
-      await resetFork();
-      this.adapter = await deployClone(await getImplementation())
-      await initialize(this.adapter, this.underlying, this.wrapper)
-      await this.underlying.approve(this.adapter.address, constants.MaxUint256)
-      await this.wrapper.approve(this.adapter.address, constants.MaxUint256)
-      const overrides = transferAddressOverrides ? await transferAddressOverrides(this.adapter, this.underlying, this.wrapper) : {};
-      this.depositSenderWrapped = overrides.depositSenderWrapped || this.adapter.address
-      this.depositReceiverWrapped = overrides.depositReceiverWrapped || this.wallet.address
-      this.depositReceiverUnderlying = overrides.depositReceiverUnderlying || this.adapter.address
-      this.withdrawalSenderUnderlying = overrides.withdrawalSenderUnderlying || this.adapter.address
+      await restoreSnapshot()
       this.amountDeposited = await this.getTokens(10)
       if (deposit) await this.adapter.deposit(this.amountDeposited)
     }
@@ -82,8 +102,7 @@ export function shouldBehaveLikeAdapterDeposit() {
 
   it('Should mint wrapper and transfer to caller', async function () {
     const amountMinted = await this.toWrapped(this.amountDeposited)
-    const tx = await this.adapter.deposit(this.amountDeposited)
-    await expect(tx)
+    await expect(this.adapter.deposit(this.amountDeposited))
       .to.emit(this.underlying, 'Transfer')
       .withArgs(this.wallet.address, this.depositReceiverUnderlying, this.amountDeposited)
       .to.emit(this.wrapper, 'Transfer')
@@ -101,7 +120,7 @@ export function shouldBehaveLikeAdapterWithdraw() {
   })
 
   it('Should burn wrapper and redeem underlying', async function () {
-    const balance = await this.wrapper.balanceOf(this.depositReceiverWrapped)
+    const balance = await this.wrapper.balanceOf(this.depositReceiverWrapped, { blockTag: 'pending' })
     this.amountDeposited = await this.toUnderlying(balance)
     await expect(this.adapter.withdraw(balance))
       .to.emit(this.underlying, 'Transfer')
@@ -144,7 +163,7 @@ export function shouldBehaveLikeAdapterWithdrawUnderlying() {
 export function shouldBehaveLikeAdapterWithdrawUnderlyingUpTo() {
   beforeEach(async function () {
     await this.resetTests()
-    await sendTokenToFrom(this.underlying, await this.converter.liquidityHolder(this.wrapper), `0x${'ff'.repeat(20)}`, await this.adapter.availableLiquidity())
+    await sendTokenToFrom(this.underlying, await this.converter.liquidityHolder(this.wrapper), `0x${'ff'.repeat(20)}`, await this.adapter.availableLiquidity({ blockTag: 'pending' }))
     await this.adapter.deposit(this.amountDeposited)
   })
 
@@ -156,7 +175,7 @@ export function shouldBehaveLikeAdapterWithdrawUnderlyingUpTo() {
     const balanceUnderlying = await this.adapter.balanceUnderlying({ blockTag: 'pending' })
     const halfBalance = balanceUnderlying.div(2)
     await sendTokenToFrom(this.underlying, await this.converter.liquidityHolder(this.wrapper), `0x${'ff'.repeat(20)}`, halfBalance)
-    const available = await this.adapter.availableLiquidity()
+    const available = await this.adapter.availableLiquidity({ blockTag: 'pending' })
     await expect(this.adapter.withdrawUnderlyingUpTo(balanceUnderlying))
       .to.emit(this.underlying, 'Transfer')
       .withArgs(this.withdrawalSenderUnderlying, this.wallet.address, available)
@@ -168,8 +187,9 @@ export function shouldBehaveLikeAdapterWithdrawUnderlyingUpTo() {
 export function shouldBehaveLikeAdapterQueries() {
   describe('settings', function () {
     before(function () {return this.resetTests();})
+
     it('name()', async function () {
-      expect(await this.adapter.name()).to.eq(`${this.converter.protocolName} ${await getTokenSymbol(this.underlying)} Adapter`)
+      expect(await this.adapter.name()).to.eq(`${this.converter.protocolName} ${this.symbol} Adapter`)
     })
   
     it('token()', async function () {
@@ -194,11 +214,15 @@ export function shouldBehaveLikeAdapterQueries() {
       const liquidity = await this.adapter.availableLiquidity()
       const balance = await this.adapter.balanceUnderlying({ blockTag: 'pending' })
       await this.adapter.withdrawAll()
-      expect(await this.adapter.availableLiquidity()).to.eq(liquidity.sub(balance))
+      const diff = relativeDiff(
+        await this.adapter.availableLiquidity(),
+        liquidity.sub(balance)
+      )
+      expect(diff).to.be.lt(0.00000001)
     })
   })
 
-  describe('toWrappedAmount', function () {
+  describe('toWrappedAmount()', function () {
     before(function() {return this.resetTests(true)})
 
     it('Returns amount of wrapper for underlying', async function () {
@@ -210,7 +234,7 @@ export function shouldBehaveLikeAdapterQueries() {
     })
   })
 
-  describe('toUnderlyingAmount', () => {
+  describe('toUnderlyingAmount()', () => {
     before(function() {return this.resetTests(true)})
 
     it('Returns amount of wrapper for underlying', async function () {
@@ -273,14 +297,13 @@ export function shouldBehaveLikeAdapter(
   converter: ConvertHelper,
   _underlying: string,
   _wrapper: string,
+  symbol: string,
   transferAddressOverrides?: (adapter: IErc20Adapter, underlying: IERC20, token: IERC20) => Promise<{
     depositSenderWrapped?: string
     depositReceiverWrapped?: string
     depositReceiverUnderlying?: string
     withdrawalSenderUnderlying?: string
   }>
-  // depositSenderWrappedOverride?: (adapter: IErc20Adapter, underlying: IERC20, token: IERC20) => string,
-  // withdrawalSenderOverride?: (adapter: IErc20Adapter, underlying: IERC20, token: IERC20) => string
 ) {
   setupAdapterContext(
     getImplementation,
@@ -288,6 +311,7 @@ export function shouldBehaveLikeAdapter(
     converter,
     _underlying,
     _wrapper,
+    symbol,
     transferAddressOverrides
   )
 
@@ -314,6 +338,4 @@ export function shouldBehaveLikeAdapter(
   describe('withdrawUnderlyingUpTo()', function () {
     shouldBehaveLikeAdapterWithdrawUnderlyingUpTo()
   })
-
-  // shouldBehaveLikeAdapterWithdraw()
 }
