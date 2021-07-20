@@ -4,13 +4,13 @@ import { getAddress } from "@ethersproject/address"
 import { IComptroller, IERC20, IErc20Adapter, TestComptrollerLens } from "../../typechain"
 import {
   setupAdapterContext,
-  shouldBehaveLikeAdapterDeposit,
-  shouldBehaveLikeAdapterInitialize,
-  shouldBehaveLikeAdapterQueries,
-  shouldBehaveLikeAdapterWithdraw,
-  shouldBehaveLikeAdapterWithdrawAll,
-  shouldBehaveLikeAdapterWithdrawUnderlying,
-  shouldBehaveLikeAdapterWithdrawUnderlyingUpTo
+  shouldBehaveLikeErc20AdapterDeposit,
+  shouldBehaveLikeErc20AdapterInitialize,
+  shouldBehaveLikeErc20AdapterQueries,
+  shouldBehaveLikeErc20AdapterWithdraw,
+  shouldBehaveLikeErc20AdapterWithdrawAll,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlying,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo
 } from "../Erc20AdapterBehavior.spec"
 import { advanceBlock, deployContract, getIERC20, CompoundConverter } from '../shared'
 
@@ -33,16 +33,16 @@ describe('CErc20Adapter', () => {
       symbol,
     )
 
-    shouldBehaveLikeAdapterInitialize()
+    shouldBehaveLikeErc20AdapterInitialize()
 
-    shouldBehaveLikeAdapterQueries()
+    shouldBehaveLikeErc20AdapterQueries()
 
     describe('deposit()', function () {
-      shouldBehaveLikeAdapterDeposit()
+      shouldBehaveLikeErc20AdapterDeposit()
     })
   
     describe('withdraw()', function () {
-      shouldBehaveLikeAdapterWithdraw()
+      shouldBehaveLikeErc20AdapterWithdraw()
 
       it('Should claim COMP owed to caller if incentivized', async function () {
         await this.resetTests(true)
@@ -59,7 +59,7 @@ describe('CErc20Adapter', () => {
     })
   
     describe('withdrawAll()', function () {
-      shouldBehaveLikeAdapterWithdrawAll()
+      shouldBehaveLikeErc20AdapterWithdrawAll()
 
       it('Should claim COMP owed to caller if incentivized', async function () {
         await this.resetTests(true)
@@ -76,7 +76,7 @@ describe('CErc20Adapter', () => {
     })
   
     describe('withdrawUnderlying()', function () {
-      shouldBehaveLikeAdapterWithdrawUnderlying()
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
 
       it('Should claim COMP owed to caller if incentivized', async function () {
         await this.resetTests(true)
@@ -93,7 +93,7 @@ describe('CErc20Adapter', () => {
     })
   
     describe('withdrawUnderlyingUpTo()', function () {
-      shouldBehaveLikeAdapterWithdrawUnderlyingUpTo()
+      shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo()
 
       it('Should claim COMP owed to caller if incentivized', async function () {
         await this.resetTests(true)

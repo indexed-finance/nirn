@@ -75,7 +75,7 @@ export const setupAdapterContext = (
   })
 }
 
-export function shouldBehaveLikeAdapterInitialize() {
+export function shouldBehaveLikeErc20AdapterInitialize() {
   describe('initialize()', function () {
     before(function () {return this.resetTests()})
 
@@ -97,7 +97,7 @@ export function shouldBehaveLikeAdapterInitialize() {
   })
 }
 
-export function shouldBehaveLikeAdapterDeposit() {
+export function shouldBehaveLikeErc20AdapterDeposit() {
   beforeEach(function () {return this.resetTests();})
 
   it('Should revert if caller has insufficient balance', async function () {
@@ -116,7 +116,7 @@ export function shouldBehaveLikeAdapterDeposit() {
   })
 }
 
-export function shouldBehaveLikeAdapterWithdraw() {
+export function shouldBehaveLikeErc20AdapterWithdraw() {
   beforeEach(function () {return this.resetTests(true);})
 
   it('Should revert if caller has insufficient balance', async function () {
@@ -133,7 +133,7 @@ export function shouldBehaveLikeAdapterWithdraw() {
   })
 }
 
-export function shouldBehaveLikeAdapterWithdrawAll() {
+export function shouldBehaveLikeErc20AdapterWithdrawAll() {
   beforeEach(function () {return this.resetTests(true);})
 
   it('Should burn all caller wrapper token and redeem underlying', async function () {
@@ -147,7 +147,7 @@ export function shouldBehaveLikeAdapterWithdrawAll() {
   })
 }
 
-export function shouldBehaveLikeAdapterWithdrawUnderlying() {
+export function shouldBehaveLikeErc20AdapterWithdrawUnderlying() {
   beforeEach(function () {return this.resetTests(true);})
 
   it('Should revert if caller has insufficient balance', async function () {
@@ -164,7 +164,7 @@ export function shouldBehaveLikeAdapterWithdrawUnderlying() {
   })
 }
 
-export function shouldBehaveLikeAdapterWithdrawUnderlyingUpTo() {
+export function shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo() {
   beforeEach(async function () {
     await this.resetTests()
     await sendTokenToFrom(this.underlying, await this.converter.liquidityHolder(this.wrapper), `0x${'ff'.repeat(20)}`, await this.adapter.availableLiquidity({ blockTag: 'pending' }))
@@ -188,7 +188,7 @@ export function shouldBehaveLikeAdapterWithdrawUnderlyingUpTo() {
   })
 }
 
-export function shouldBehaveLikeAdapterQueries() {
+export function shouldBehaveLikeErc20AdapterQueries() {
   describe('settings', function () {
     before(function () {return this.resetTests();})
 
@@ -299,7 +299,7 @@ export function shouldBehaveLikeAdapterQueries() {
   })
 }
 
-export function shouldBehaveLikeAdapter(
+export function shouldBehaveLikeErc20Adapter(
   getImplementation: () => Promise<IErc20Adapter>,
   initialize: (adapter: IErc20Adapter, underlying: IERC20, token: IERC20) => Promise<any>,
   converter: ConvertHelper,
@@ -323,27 +323,27 @@ export function shouldBehaveLikeAdapter(
     transferAddressOverrides
   )
 
-  shouldBehaveLikeAdapterInitialize()
+  shouldBehaveLikeErc20AdapterInitialize()
 
-  shouldBehaveLikeAdapterQueries()
+  shouldBehaveLikeErc20AdapterQueries()
 
   describe('deposit()', function () {
-    shouldBehaveLikeAdapterDeposit()
+    shouldBehaveLikeErc20AdapterDeposit()
   })
 
   describe('withdraw()', function () {
-    shouldBehaveLikeAdapterWithdraw()
+    shouldBehaveLikeErc20AdapterWithdraw()
   })
 
   describe('withdrawAll()', function () {
-    shouldBehaveLikeAdapterWithdrawAll()
+    shouldBehaveLikeErc20AdapterWithdrawAll()
   })
 
   describe('withdrawUnderlying()', function () {
-    shouldBehaveLikeAdapterWithdrawUnderlying()
+    shouldBehaveLikeErc20AdapterWithdrawUnderlying()
   })
 
   describe('withdrawUnderlyingUpTo()', function () {
-    shouldBehaveLikeAdapterWithdrawUnderlyingUpTo()
+    shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo()
   })
 }

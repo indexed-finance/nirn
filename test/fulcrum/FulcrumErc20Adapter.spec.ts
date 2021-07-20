@@ -5,12 +5,12 @@ import { constants } from "ethers"
 import { FulcrumErc20Adapter } from "../../typechain"
 import {
   setupAdapterContext,
-  shouldBehaveLikeAdapterInitialize,
-  shouldBehaveLikeAdapterQueries,
-  shouldBehaveLikeAdapterDeposit,
-  shouldBehaveLikeAdapterWithdraw,
-  shouldBehaveLikeAdapterWithdrawAll,
-  shouldBehaveLikeAdapterWithdrawUnderlying
+  shouldBehaveLikeErc20AdapterInitialize,
+  shouldBehaveLikeErc20AdapterQueries,
+  shouldBehaveLikeErc20AdapterDeposit,
+  shouldBehaveLikeErc20AdapterWithdraw,
+  shouldBehaveLikeErc20AdapterWithdrawAll,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlying
 } from "../Erc20AdapterBehavior.spec"
 import { deployContract, FulcrumConverter, getBigNumber, sendTokenTo, sendTokenToFrom } from '../shared'
 
@@ -29,24 +29,24 @@ describe('FulcrumErc20Adapter', () => {
       })
     )
   
-    shouldBehaveLikeAdapterInitialize()
+    shouldBehaveLikeErc20AdapterInitialize()
   
-    shouldBehaveLikeAdapterQueries()
+    shouldBehaveLikeErc20AdapterQueries()
   
     describe('deposit()', function () {
-      shouldBehaveLikeAdapterDeposit()
+      shouldBehaveLikeErc20AdapterDeposit()
     })
   
     describe('withdraw()', function () {
-      shouldBehaveLikeAdapterWithdraw()
+      shouldBehaveLikeErc20AdapterWithdraw()
     })
   
     describe('withdrawAll()', function () {
-      shouldBehaveLikeAdapterWithdrawAll()
+      shouldBehaveLikeErc20AdapterWithdrawAll()
     })
   
     describe('withdrawUnderlying()', function () {
-      shouldBehaveLikeAdapterWithdrawUnderlying()
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
     })
 
     describe('withdrawUnderlyingUpTo()', function () {

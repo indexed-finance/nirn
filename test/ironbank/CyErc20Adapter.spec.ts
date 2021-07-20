@@ -1,12 +1,12 @@
 import { getAddress } from "@ethersproject/address"
 import { IErc20Adapter } from "../../typechain"
-import { shouldBehaveLikeAdapter } from "../Erc20AdapterBehavior.spec"
+import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
 import { deployContract, IronBankConverter } from '../shared'
 
 
 describe('CyErc20Adapter', () => {
   const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`cy${symbol}`, function () {
-    shouldBehaveLikeAdapter(
+    shouldBehaveLikeErc20Adapter(
       async () => (await deployContract('CyErc20Adapter')) as IErc20Adapter,
       (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
       IronBankConverter,

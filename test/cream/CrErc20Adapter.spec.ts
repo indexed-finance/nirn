@@ -1,12 +1,12 @@
 import { getAddress } from "@ethersproject/address"
 import { CrErc20Adapter } from "../../typechain"
-import { shouldBehaveLikeAdapter } from "../Erc20AdapterBehavior.spec"
+import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
 import { deployContract, CreamConverter } from '../shared'
 
 
 describe('CrErc20Adapter', () => {
   const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`cr${symbol}`, function () {
-    shouldBehaveLikeAdapter(
+    shouldBehaveLikeErc20Adapter(
       async () => (await deployContract('CrErc20Adapter')) as CrErc20Adapter,
       async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
       CreamConverter,

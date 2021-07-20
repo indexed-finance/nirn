@@ -1,13 +1,13 @@
 import { getAddress } from "@ethersproject/address"
 import { C1Erc20Adapter } from "../../typechain"
-import { shouldBehaveLikeAdapter } from "../Erc20AdapterBehavior.spec"
+import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
 import { deployContract } from '../shared'
 import { CompoundConverter } from "../shared/conversion"
 
 
 describe('C1Erc20Adapter', () => {
   const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`c${symbol}`, function () {
-    shouldBehaveLikeAdapter(
+    shouldBehaveLikeErc20Adapter(
       async () => (await deployContract('C1Erc20Adapter')) as C1Erc20Adapter,
       async (adapter, underlying, token) => (adapter as C1Erc20Adapter).initialize(underlying.address, token.address),
       CompoundConverter,

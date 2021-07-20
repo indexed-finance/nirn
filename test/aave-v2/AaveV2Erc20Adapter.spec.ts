@@ -4,12 +4,12 @@ import { constants } from "ethers"
 import { AaveV2Erc20Adapter, IAaveDistributionManager, IERC20, IStakedAave } from "../../typechain"
 import {
   setupAdapterContext,
-  shouldBehaveLikeAdapterDeposit,
-  shouldBehaveLikeAdapterInitialize,
-  shouldBehaveLikeAdapterQueries,
-  shouldBehaveLikeAdapterWithdraw,
-  shouldBehaveLikeAdapterWithdrawAll,
-  shouldBehaveLikeAdapterWithdrawUnderlying
+  shouldBehaveLikeErc20AdapterDeposit,
+  shouldBehaveLikeErc20AdapterInitialize,
+  shouldBehaveLikeErc20AdapterQueries,
+  shouldBehaveLikeErc20AdapterWithdraw,
+  shouldBehaveLikeErc20AdapterWithdrawAll,
+  shouldBehaveLikeErc20AdapterWithdrawUnderlying
 } from "../Erc20AdapterBehavior.spec"
 import { deployContract, getContract, getNextContractAddress, latest, advanceTimeAndBlock, AaveV2Converter } from '../shared'
 
@@ -44,12 +44,12 @@ describe('AaveV2Erc20Adapter', function () {
       }
     )
 
-    shouldBehaveLikeAdapterInitialize()
+    shouldBehaveLikeErc20AdapterInitialize()
 
-    shouldBehaveLikeAdapterQueries()
+    shouldBehaveLikeErc20AdapterQueries()
 
     describe('deposit()', function () {
-      shouldBehaveLikeAdapterDeposit()
+      shouldBehaveLikeErc20AdapterDeposit()
 
       it('If token is incentivized, should claim stkAave and begin cooldown after first deposit', async function () {
         if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
@@ -81,7 +81,7 @@ describe('AaveV2Erc20Adapter', function () {
     })
   
     describe('withdraw()', function () {
-      shouldBehaveLikeAdapterWithdraw()
+      shouldBehaveLikeErc20AdapterWithdraw()
 
       it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
         if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
@@ -108,7 +108,7 @@ describe('AaveV2Erc20Adapter', function () {
     })
   
     describe('withdrawUnderlying()', function () {
-      shouldBehaveLikeAdapterWithdrawUnderlying()
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
 
       it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
         if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
@@ -135,7 +135,7 @@ describe('AaveV2Erc20Adapter', function () {
     })
   
     describe('withdrawUnderlyingUpTo()', function () {
-      shouldBehaveLikeAdapterWithdrawUnderlying()
+      shouldBehaveLikeErc20AdapterWithdrawUnderlying()
 
       it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
         if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
@@ -162,7 +162,7 @@ describe('AaveV2Erc20Adapter', function () {
     })
   
     describe('withdrawAll()', function () {
-      shouldBehaveLikeAdapterWithdrawAll()
+      shouldBehaveLikeErc20AdapterWithdrawAll()
 
       it('If token is incentivized, should claim stkAave and begin cooldown', async function () {
         if ((await incentives.getAssetData(this.wrapper.address)).emissionPerSecond.gt(0)) {
