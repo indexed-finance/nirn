@@ -150,6 +150,14 @@ abstract contract AbstractProtocolAdapter {
     }
   }
 
+  function getFrozenAdapters() external view returns (address[] memory tokens) {
+    tokens = frozenAdapters;
+  }
+
+  function getFrozenTokens() external view returns (address[] memory tokens) {
+    tokens = frozenTokens;
+  }
+
 /* ========== Internal Queries ========== */
 
   /**

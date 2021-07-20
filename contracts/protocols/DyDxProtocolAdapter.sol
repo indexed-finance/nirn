@@ -130,11 +130,8 @@ contract DyDxProtocolAdapter {
     return "DyDx";
   }
 
-  function frozenTokens() external view returns (address[] memory tokens) {
-    DyDxMarket[] memory markets = frozenMarkets;
-    uint256 len = markets.length;
-    tokens = new address[](len);
-    for (uint256 i; i < len; i++) tokens[i] = markets[i].underlying;
+  function frozenTokens(uint256 index) external view returns (address token) {
+    token = frozenMarkets[index].underlying;
   }
 
   function getUnmapped() public view returns (address[] memory tokens) {
@@ -156,6 +153,17 @@ contract DyDxProtocolAdapter {
       address underlying = dydx.getMarketTokenAddress(marketId);
       tokens[i] = underlying;
     }
+  }
+
+  function getFrozenAdapters() external view returns (address[] memory tokens) {
+    tokens = frozenAdapters;
+  }
+
+  function getFrozenTokens() external view returns (address[] memory tokens) {
+    DyDxMarket[] memory markets = frozenMarkets;
+    uint256 len = markets.length;
+    tokens = new address[](len);
+    for (uint256 i; i < len; i++) tokens[i] = markets[i].underlying;
   }
 
 /* ========== Internal Queries ========== */  
