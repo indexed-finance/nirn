@@ -61,6 +61,8 @@ interface IDyDx is DyDxStructs {
 
   function getNumMarkets() external view returns (uint256);
 
+  function getMarketIsClosing(uint256 marketId) external view returns (bool);
+
   function getMarketTokenAddress(uint256) external view returns (address);
 
   function getMarketInterestRate(uint256 marketId) external view returns (Val memory);
