@@ -24,6 +24,7 @@ declare module "mocha" {
     getTokens: (n: number) => Promise<BigNumber>
 
     // Context data
+    symbol: string;
     decimals: number
     /** @param depositSenderWrapped Address that the minted tokens are transferred from. */
     depositSenderWrapped: string
