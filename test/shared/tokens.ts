@@ -3,7 +3,7 @@ import { keccak256 } from '@ethersproject/keccak256';
 import { BigNumber } from 'ethers';
 import { ethers, waffle } from 'hardhat';
 import { IERC20, IWETH, IUniswapV2Pair, IERC20Metadata } from '../../typechain';
-import { formatUnits, parseUnits } from '@ethersproject/units';
+import { formatEther, formatUnits, parseUnits } from '@ethersproject/units';
 import { getBigNumber, getContract, withSigner } from './utils';
 
 export const SUSHISWAP_FACTORY_ADDRESS = '0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac'
@@ -28,11 +28,28 @@ export async function getBalance(erc20: string, account: string): Promise<BigNum
 
 const holders: Record<string, string> = {
   '0xbA4cFE5741b357FA371b506e5db0774aBFeCf8Fc': '0xDBC13E67F678Cc00591920ceCe4dCa6322a79AC7',
-  '0x9cA85572E6A3EbF24dEDd195623F188735A5179f': '0x1E5CE6F088fD0adb4fCFf31Cfb02A61503311bE9'
+  '0x9cA85572E6A3EbF24dEDd195623F188735A5179f': '0x1E5CE6F088fD0adb4fCFf31Cfb02A61503311bE9',
+  '0xe1237aA7f535b0CC33Fd973D66cBf830354D16c7': '0x312e02D14B8D2bb593f681739DC0Fe51aC84d23b',
+  '0xa9fE4601811213c340e850ea305481afF02f5b28': '0x28b8eA972a2EEb21c7B6Cbf7182F7849FfaB31b8',
+  '0x4B5BfD52124784745c1071dcB244C6688d2533d3': '0x7a15866aFfD2149189Aa52EB8B40a8F9166441D9',
+  '0xdF5e0e81Dff6FAF3A7e52BA697820c5e32D806A8': '0x77D3C47876e45123C2837Ba68720378Af00a2C0A',
+  '0x5dbcF33D8c2E976c6b560249878e6F1491Bca25c': '0xA875b5083CaB61496dEDaa162C37130310512325',
+  '0x27b7b1ad7288079A66d12350c828D3C00A6F07d7': '0x1C0b104A9EeFf2F7001348a49fA28b8A0D23d637',
+  '0x986b4AFF588a109c09B50A03f42E4110E29D353F': '0xDAef20EA4708FcFf06204A4FE9ddf41dB056bA18',
+  '0xdCD90C7f6324cfa40d7169ef80b12031770B4325': '0x7ccC9481fbcA38091044194982575f305d3E9e22'
+
 }
 
 export async function isPairToken(token: string) {
-  return (await getContract(token, 'IUniswapV2Pair')).getReserves().then(() => true).catch(() => false)
+  return (await getContract(token, 'IUniswapV2Pair')).getReserves().then(() => true)
+}
+
+function divCeil(a: BigNumber, b: BigNumber): BigNumber {
+  let q = a.div(b)
+  if (!q.mul(b).eq(a)) {
+    q = q.add(1)
+  }
+  return q
 }
 
 export async function sendPairTokens(pairAddress: string, to: string, amount: BigNumber) {
@@ -42,17 +59,25 @@ export async function sendPairTokens(pairAddress: string, to: string, amount: Bi
   const b0 = await t0.balanceOf(pairAddress);
   const b1 = await t1.balanceOf(pairAddress);
   const supply = await pair.totalSupply();
-  const a0 = amount.mul(b0).div(supply);
-  const a1 = amount.mul(b1).div(supply);
+  const a0 = divCeil(amount.mul(b0), supply);
+  const a1 = divCeil(amount.mul(b1), supply);
   const [wallet] = waffle.provider.getWallets()
   await sendTokenTo(t0.address, wallet.address, a0);
   await sendTokenTo(t1.address, wallet.address, a1);
   await pair.sync();
   await t0.transfer(pair.address, a0)
   await t1.transfer(pair.address, a1)
+  const balanceBefore = await pair.balanceOf(to)
   await withSigner(WETH, async (signer) => {
     await pair.connect(signer).mint(to);
   })
+  const balanceAfter = await pair.balanceOf(to)
+  const gained = balanceAfter.sub(balanceBefore)
+  if (gained.gt(amount)) {
+    await withSigner(to, async (signer) => {
+      await pair.connect(signer).transfer(`0x${'ff'.repeat(20)}`, gained.sub(amount))
+    })
+  }
 }
 
 export async function sendTokenTo(erc20: string, to: string, amount: BigNumber) {
