@@ -216,6 +216,8 @@ describe('NirnVault', () => {
       await expect(await deposit(getBigNumber(10)))
         .to.emit(underlying, 'Transfer')
         .withArgs(wallet.address, vault.address, getBigNumber(10))
+        .to.emit(vault, 'FeesClaimed')
+        .withArgs(fees, feeShares)
         .to.emit(vault, 'Transfer')
         .withArgs(constants.AddressZero, feeRecipient.address, feeShares)
         .to.emit(vault, 'Transfer')
@@ -450,6 +452,20 @@ describe('NirnVault', () => {
         apr = await adapter1.getAPR()
         apr = apr.sub(apr.mul(getBigNumber(1,17)).div(getBigNumber(1)))
         expect(diff(await vault.getAPR(), apr)).to.be.lte(1)
+      })
+    })
+
+    describe('getAPRs()', () => {
+      setupTests(true)
+
+      it('Should return APRs of adapters accounting for liquidity deltas', async () => {
+        await vault.setAdaptersAndWeightsInternal(
+          [adapter1.address, adapter2.address],
+          [getBigNumber(5, 17), getBigNumber(5, 17)]
+        )
+        let apr1 = await adapter1.getHypotheticalAPR(getBigNumber(45, 16))
+        let apr2 = await adapter2.getHypotheticalAPR(getBigNumber(45, 16))
+        expect(await vault.getAPRs()).to.deep.eq([apr1, apr2])
       })
     })
   
