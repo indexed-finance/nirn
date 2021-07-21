@@ -19,6 +19,14 @@ interface INirnVault {
 
   event Rebalanced();
 
+  event SetFeeRecipient(address feeRecipient);
+
+  event SetPerformanceFee(uint256 performanceFee);
+
+  event SetReserveRatio(uint256 reserveRatio);
+
+  event SetRewardsSeller(address rewardsSeller);
+
 /* ========== Config Queries ========== */
 
   function minimumAPRImprovement() external view returns (uint256);
@@ -53,6 +61,8 @@ interface INirnVault {
 
   function setRewardsSeller(IRewardsSeller _rewardsSeller) external;
 
+  function setReserveRatio(uint64 _reserveRatio) external;
+
 /* ========== Balance Queries ========== */
 
   function balance() external view returns (uint256 sum);
@@ -81,4 +91,49 @@ interface INirnVault {
     IErc20Adapter[] memory adapters,
     uint256[] memory weights
   );
+
+/* ========== Liquidity Delta Queries ========== */
+
+  function getCurrentLiquidityDeltas() external view returns (int256[] memory liquidityDeltas);
+  
+  function getHypotheticalLiquidityDeltas(
+    uint256[] calldata proposedWeights
+  ) external view returns (int256[] memory liquidityDeltas);
+  
+  function getHypotheticalLiquidityDeltas(
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external view returns (int256[] memory liquidityDeltas);
+
+/* ========== APR Queries ========== */
+
+  function getAPR() external view returns (uint256);
+
+  function getAPRs() external view returns (uint256[] memory aprs);
+
+  function getHypotheticalAPR(uint256[] memory proposedWeights) external view returns (uint256);
+
+  function getHypotheticalAPR(
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external view returns (uint256);
+
+/* ========== Deposit/Withdraw ========== */
+
+  function deposit(uint256 amount) external returns (uint256 shares);
+
+  function depositTo(uint256 amount, address to) external returns (uint256 shares);
+
+  function withdraw(uint256 shares) external returns (uint256 owed);
+
+/* ========== Rebalance Actions ========== */
+
+  function rebalance() external;
+
+  function rebalanceWithNewWeights(uint256[] calldata proposedWeights) external;
+
+  function rebalanceWithNewAdapters(
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external;
 }
