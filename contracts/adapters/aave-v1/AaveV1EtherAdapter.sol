@@ -57,7 +57,7 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256 apr) {
+  function getAPR() public view virtual override returns (uint256 apr) {
     apr = core.getReserveCurrentLiquidityRate(ETH_RESERVE_ADDRESS) / 1e9;
   }
 

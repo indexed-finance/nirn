@@ -102,9 +102,13 @@ contract AaveV2EtherAdapter is IEtherAdapter {
     return getRewardsAPR(IERC20(token).totalSupply());
   }
 
-  function getAPR() external view virtual override returns (uint256 apr) {
+  function getBaseAPR() internal view returns (uint256) {
     ILendingPool.ReserveData memory reserve = pool.getReserveData(underlying);
-    apr = (uint256(reserve.currentLiquidityRate) / 1e9).add(getRewardsAPR());
+    return uint256(reserve.currentLiquidityRate) / 1e9;
+  }
+
+  function getAPR() public view virtual override returns (uint256 apr) {
+    return getBaseAPR().add(getRewardsAPR(IERC20(token).totalSupply()));
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
@@ -123,6 +127,27 @@ contract AaveV2EtherAdapter is IEtherAdapter {
     );
     uint256 newLiquidity = _availableLiquidity.add(totalVariableDebt).add(totalStableDebt);
     return (liquidityRate / 1e9).add(getRewardsAPR(newLiquidity));
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    override
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    uint256 rewardsAPR = getRewardsAPR(IERC20(token).totalSupply());
+    uint256 size = rewardsAPR > 0 ? 2 : 1;
+    assets = new address[](size);
+    aprs = new uint256[](size);
+    assets[0] = underlying;
+    aprs[0] = getAPR();
+    if (rewardsAPR > 0) {
+      assets[1] = aave;
+      aprs[1] = rewardsAPR;
+    }
   }
 
 /* ========== Caller Balance Queries ========== */

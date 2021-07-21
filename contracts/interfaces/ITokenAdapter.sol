@@ -25,6 +25,14 @@ interface IErc20Adapter {
 
   function getHypotheticalAPR(int256 liquidityDelta) external view returns (uint256);
 
+  function getRevenueBreakdown()
+    external
+    view
+    returns (
+      address[] memory assets,
+      uint256[] memory apr
+    );
+
 /* ========== Caller Balance Queries ========== */
 
   function balanceWrapped() external view returns (uint256);

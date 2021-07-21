@@ -63,7 +63,7 @@ contract FulcrumEtherAdapter is IEtherAdapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256 apr) {
+  function getAPR() public view virtual override returns (uint256 apr) {
     return IToken(token).supplyInterestRate() / 100;
   }
 
@@ -71,6 +71,21 @@ contract FulcrumEtherAdapter is IEtherAdapter {
     return IToken(token).totalSupplyInterestRate(
       IToken(token).totalAssetSupply().add(liquidityDelta)
     ) / 100;
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    override
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    assets = new address[](1);
+    aprs = new uint256[](1);
+    assets[0] = underlying;
+    aprs[0] = getAPR();
   }
 
 /* ========== Caller Balance Queries ========== */

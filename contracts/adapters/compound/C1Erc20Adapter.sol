@@ -51,7 +51,7 @@ contract C1Erc20Adapter is AbstractErc20Adapter() {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256) {
+  function getAPR() public view virtual override returns (uint256) {
     return C1TokenParams.getSupplyRateV1(token, 0).mul(2102400);
   }
 

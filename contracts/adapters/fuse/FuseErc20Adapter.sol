@@ -62,7 +62,7 @@ contract FuseErc20Adapter is AbstractErc20Adapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256) {
+  function getAPR() public view virtual override returns (uint256) {
     return IFToken(token).supplyRatePerBlock().mul(2102400);
   }
 

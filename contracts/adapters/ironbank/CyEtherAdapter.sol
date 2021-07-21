@@ -46,7 +46,7 @@ contract CyEtherAdapter is AbstractEtherAdapter() {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256) {
+  function getAPR() public view virtual override returns (uint256) {
     return ICToken(token).supplyRatePerBlock().mul(2102400);
   }
 
