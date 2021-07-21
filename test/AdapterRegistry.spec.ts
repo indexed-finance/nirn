@@ -1,8 +1,9 @@
 import { expect } from "chai";
 import { constants } from "ethers";
 import { waffle } from "hardhat";
-import { AdapterRegistry, TestAdapter } from "../typechain"
-import { deployContract, getBigNumber, resetFork, withSigner } from "./shared";
+import { AdapterRegistry, TestAdapter, TestERC20, TestVault } from "../typechain"
+import { createSnapshot, deployContract, getBigNumber } from "./shared";
+import { deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
 
 const ADDRESS_ONE = `0x${'11'.repeat(20)}`;
 const ADDRESS_TWO = `0x${'22'.repeat(20)}`;
@@ -13,16 +14,25 @@ describe('AdapterRegistry', () => {
 
   let registry: AdapterRegistry
   let adapter: TestAdapter
+  let wrapper: TestVault
   let adapter1: TestAdapter
+  let wrapper1: TestVault
+  let underlying: TestERC20
+  let restoreSnapshot: () => Promise<void>
 
-  const setup = () => before('Deploy registry', async () => {
-    await resetFork()
-    registry = await deployContract('AdapterRegistry')
-    adapter = await deployContract('TestAdapter', ADDRESS_ONE, ADDRESS_TWO, getBigNumber(1000), getBigNumber(10000), getBigNumber(500));
-    adapter1 = await deployContract('TestAdapter', ADDRESS_ONE, ADDRESS_THREE, getBigNumber(1000), getBigNumber(10000), getBigNumber(500));
+  before(async () => {
+    registry = await deployContract('AdapterRegistry');
+    underlying = await deployTestERC20();
+    ({adapter, wrapper} = await deployTestWrapperAndAdapter(underlying.address, getBigNumber(5, 16)));
+    ({adapter: adapter1, wrapper: wrapper1} = await deployTestWrapperAndAdapter(underlying.address, getBigNumber(5, 16)));
+    restoreSnapshot = await createSnapshot()
   })
 
-  describe('addProtocolAdapter', () => {
+  const setup = () => before('Deploy registry', async () => {
+    await restoreSnapshot()
+  })
+
+  describe('addProtocolAdapter()', () => {
     setup()
 
     it('Should revert if not called by owner or protocol adapter', async () => {
@@ -56,7 +66,7 @@ describe('AdapterRegistry', () => {
     })
   })
 
-  describe('removeProtocolAdapter', () => {
+  describe('removeProtocolAdapter()', () => {
     setup()
 
     it('Should revert if not called by owner', async () => {
@@ -87,7 +97,7 @@ describe('AdapterRegistry', () => {
     })
   })
 
-  describe('addTokenAdapter', () => {
+  describe('addTokenAdapter()', () => {
     setup()
 
     it('Should revert if caller is not a protocol adapter', async () => {
@@ -102,21 +112,21 @@ describe('AdapterRegistry', () => {
     it('Should allow protocol adapters to add token adapters', async () => {
       await expect(registry.connect(approvedProtocol).addTokenAdapter(adapter.address))
         .to.emit(registry, 'TokenAdapterAdded')
-        .withArgs(adapter.address, 1, ADDRESS_ONE, ADDRESS_TWO)
+        .withArgs(adapter.address, 1, underlying.address, wrapper.address)
         .to.emit(registry, 'TokenSupportAdded')
-        .withArgs(ADDRESS_ONE)
+        .withArgs(underlying.address)
     })
     
     it('Should add underlying to supportedTokens if it is new', async () => {
-      expect(await registry.getSupportedTokens()).to.deep.eq([ ADDRESS_ONE ])
+      expect(await registry.getSupportedTokens()).to.deep.eq([ underlying.address ])
     })
     
-    it('Should add adapter to tokenAdapters', async () => {
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([ adapter.address ])
+    it('Should add adapter to tokenAdapters list for underlying token', async () => {
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([ adapter.address ])
     })
 
     it('Should map wrapper token to adapter', async () => {
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_TWO)).to.eq(adapter.address)
+      expect(await registry.getAdapterForWrapperToken(wrapper.address)).to.eq(adapter.address)
     })
 
     it('Should revert if wrapper is already mapped to an adapter', async () => {
@@ -126,15 +136,15 @@ describe('AdapterRegistry', () => {
     it('Should not change supportedTokens if underlying token is not new', async () => {
       await expect(registry.connect(approvedProtocol).addTokenAdapter(adapter1.address))
         .to.emit(registry, 'TokenAdapterAdded')
-        .withArgs(adapter1.address, 1, ADDRESS_ONE, ADDRESS_THREE)
+        .withArgs(adapter1.address, 1, underlying.address, wrapper1.address)
         .to.not.emit(registry, 'TokenSupportAdded')
-      expect(await registry.getSupportedTokens()).to.deep.eq([ ADDRESS_ONE ])
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([ adapter.address, adapter1.address ])
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_THREE)).to.eq(adapter1.address)
+      expect(await registry.getSupportedTokens()).to.deep.eq([ underlying.address ])
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([ adapter.address, adapter1.address ])
+      expect(await registry.getAdapterForWrapperToken(wrapper1.address)).to.eq(adapter1.address)
     })
   })
 
-  describe('removeTokenAdapter', () => {
+  describe('removeTokenAdapter()', () => {
     setup()
 
     before(async () => {
@@ -154,38 +164,34 @@ describe('AdapterRegistry', () => {
     it('Should allow owner to remove any token adapter', async () => {
       await expect(registry.removeTokenAdapter(adapter.address))
         .to.emit(registry, 'TokenAdapterRemoved')
-        .withArgs(adapter.address, 1, ADDRESS_ONE, ADDRESS_TWO)
+        .withArgs(adapter.address, 1, underlying.address, wrapper.address)
         .to.not.emit(registry, 'TokenSupportRemoved')
     })
 
     it('Should remove mapping from wrapper to adapter', async () => {
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_TWO)).to.eq(constants.AddressZero)
+      expect(await registry.getAdapterForWrapperToken(wrapper.address)).to.eq(constants.AddressZero)
     })
 
     it('Should remove adapter from list of adapters for underlying', async () => {
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([adapter1.address])
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([adapter1.address])
     })
 
     it('Should not remove underlying from supported tokens if there are other adapters for it', async () => {
-      expect(await registry.getSupportedTokens()).to.deep.eq([ ADDRESS_ONE ])
+      expect(await registry.getSupportedTokens()).to.deep.eq([ underlying.address ])
     })
 
     it('Should allow protocol adapter to remove token adapters it registered', async () => {
       await expect(registry.connect(approvedProtocol).removeTokenAdapter(adapter1.address))
         .to.emit(registry, 'TokenAdapterRemoved')
-        .withArgs(adapter1.address, 1, ADDRESS_ONE, ADDRESS_THREE)
+        .withArgs(adapter1.address, 1, underlying.address, wrapper1.address)
         .to.emit(registry, 'TokenSupportRemoved')
-        .withArgs(ADDRESS_ONE)
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_THREE)).to.eq(constants.AddressZero)
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([])
+        .withArgs(underlying.address)
+      expect(await registry.getAdapterForWrapperToken(wrapper1.address)).to.eq(constants.AddressZero)
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([])
     })
 
     it('Should remove underlying from supported tokens if there are no other adapters for it', async () => {
       expect(await registry.getSupportedTokens()).to.deep.eq([])
     })
   })
-
-  // describe('getProtocolAdapters', () => {
-
-  // })
 })
