@@ -156,6 +156,7 @@ contract NirnVault is NirnVaultBase {
       uint256[] memory removeIndices = DynamicArrays.dynamicUint256Array(len);
       for (uint256 i; i < len; i++) {
         uint256 bal = balances[i];
+        if (bal == 0) continue;
         uint256 amountToWithdraw = remainder > bal ? bal : remainder;
         uint256 amountWithdrawn = adapters[i].withdrawUnderlyingUpTo(amountToWithdraw);
         remainder = remainder >= amountWithdrawn ? remainder - amountWithdrawn : 0;
