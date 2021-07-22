@@ -30,7 +30,7 @@ interface IErc20Adapter {
     view
     returns (
       address[] memory assets,
-      uint256[] memory apr
+      uint256[] memory aprs
     );
 
 /* ========== Caller Balance Queries ========== */
