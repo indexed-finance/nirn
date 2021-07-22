@@ -98,7 +98,7 @@ contract AaveV2EtherAdapter is IEtherAdapter {
     return aavePrice.mul(emissionsPerSecond.mul(365 days)).mul(1e18) / underlyingPrice.mul(_totalLiquidity);
   }
 
-  function getRewardsAPR() public view returns (uint256) {
+  function getRewardsAPR() external view returns (uint256) {
     return getRewardsAPR(IERC20(token).totalSupply());
   }
 

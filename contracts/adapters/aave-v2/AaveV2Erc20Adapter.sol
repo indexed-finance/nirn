@@ -113,6 +113,10 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
     return rewardsValue / underlyingValue;
   }
 
+  function getRewardsAPR() external view returns (uint256) {
+    return getRewardsAPR(IERC20(token).totalSupply());
+  }
+
   function getBaseAPR() internal view returns (uint256) {
     ILendingPool.ReserveData memory reserve = pool.getReserveData(underlying);
     return uint256(reserve.currentLiquidityRate) / 1e9;
@@ -154,7 +158,7 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
     assets = new address[](size);
     aprs = new uint256[](size);
     assets[0] = underlying;
-    aprs[0] = getAPR();
+    aprs[0] = getBaseAPR();
     if (rewardsAPR > 0) {
       assets[1] = aave;
       aprs[1] = rewardsAPR;
