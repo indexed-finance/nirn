@@ -1,10 +1,9 @@
-import { formatEther } from "@ethersproject/units";
 import { expect } from "chai";
 import { BigNumber, constants, ContractTransaction } from "ethers";
 import { waffle } from "hardhat";
 import { AdapterRegistry, TestAdapter, TestNirnVault, TestERC20, TestVault } from "../typechain"
 import { createSnapshot, deployContract, getBigNumber } from "./shared";
-import { deployTestAdaptersAndRegistry, deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
+import { deployTestAdaptersAndRegistry } from "./shared/fixtures";
 
 const diff = (expected: BigNumber, actual: BigNumber) => expected.sub(actual).abs();
 
