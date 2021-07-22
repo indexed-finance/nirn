@@ -137,7 +137,7 @@ describe('NirnVault', () => {
     describe('currentDistribution()', () => {
       setupTests(true);
 
-      it('Should set correct parameters for current adapters', async () => {
+      it('Should return correct params before any deposits are made to adapters', async () => {
         const dist = await vault.currentDistributionInternal();
         expect(dist.totalProductiveBalance).to.eq(getBigNumber(9))
         expect(dist._reserveBalance).to.eq(getBigNumber(10))
@@ -148,6 +148,88 @@ describe('NirnVault', () => {
         let apr = await adapter1.getHypotheticalAPR(getBigNumber(9))
         apr = apr.sub(apr.mul(getBigNumber(1,17)).div(getBigNumber(1)))
         expect(dist.params.netAPR).to.eq(apr)
+      })
+
+      it('Should return correct params after deposits are made to adapters', async () => {
+        await vault.rebalance()
+        const dist = await vault.currentDistributionInternal();
+        expect(dist.totalProductiveBalance).to.eq(getBigNumber(9))
+        expect(dist._reserveBalance).to.eq(getBigNumber(1))
+        expect(dist.params.adapters).to.deep.eq([adapter1.address])
+        expect(dist.params.weights).to.deep.eq([getBigNumber(1)])
+        expect(dist.params.liquidityDeltas).to.deep.eq([BigNumber.from(0)])
+        expect(dist.params.balances).to.deep.eq([getBigNumber(9)])
+        let apr = await adapter1.getAPR()
+        apr = apr.sub(apr.mul(getBigNumber(1,17)).div(getBigNumber(1)))
+        expect(dist.params.netAPR).to.eq(apr)
+      })
+    })
+
+    describe('balanceSheetInternal()', () => {
+      setupTests(true);
+
+      it('Should return correct params before deposits are made to adapters', async () => {
+        const sheet = await vault.balanceSheetInternal();
+        expect(sheet.totalBalance).to.eq(getBigNumber(10))
+        expect(sheet.totalProductiveBalance).to.eq(getBigNumber(9))
+        expect(sheet.reserveBalance).to.eq(getBigNumber(10))
+        expect(sheet.balances).to.deep.eq([BigNumber.from(0)])
+      })
+
+      it('Should return correct params after deposits are made to adapters', async () => {
+        await vault.rebalance()
+        const sheet = await vault.balanceSheetInternal();
+        expect(sheet.totalBalance).to.eq(getBigNumber(10))
+        expect(sheet.totalProductiveBalance).to.eq(getBigNumber(9))
+        expect(sheet.reserveBalance).to.eq(getBigNumber(1))
+        expect(sheet.balances).to.deep.eq([getBigNumber(9)])
+      })
+    })
+
+    describe('processProposedDistributionInternal()', () => {
+      beforeEach(() => reset(true))
+      
+      it('Should revert if new distribution does not improve APR', async () => {
+        await vault.rebalance()
+        const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
+        expect(
+          vault.processProposedDistributionInternal(
+            currentParams,
+            totalProductiveBalance,
+            [adapter2.address],
+            [getBigNumber(1)]
+          )
+        ).to.be.revertedWith('!increased')
+      })
+
+      it('Should revert if new distribution gives insufficient improvement', async () => {
+        await vault.rebalance()
+        await adapter2.setAnnualInterest((await adapter1.annualInterest()).mul(102).div(100))
+        const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
+        expect(
+          vault.processProposedDistributionInternal(
+            currentParams,
+            totalProductiveBalance,
+            [adapter2.address],
+            [getBigNumber(1)]
+          )
+        ).to.be.revertedWith('insufficient improvement')
+      })
+
+      it('Should include removed adapters in the end of the new params', async () => {
+        await vault.rebalance()
+        await adapter2.setAnnualInterest((await adapter1.annualInterest()).mul(106).div(100))
+        const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
+        const newParams = await vault.processProposedDistributionInternal(
+          currentParams,
+          totalProductiveBalance,
+          [adapter2.address],
+          [getBigNumber(1)]
+        )
+        expect(newParams.adapters).to.deep.eq([adapter2.address, adapter1.address])
+        expect(newParams.balances).to.deep.eq([getBigNumber(0), getBigNumber(9)])
+        expect(newParams.liquidityDeltas).to.deep.eq([getBigNumber(9), getBigNumber(-9)])
+        expect(newParams.weights).to.deep.eq([getBigNumber(1), BigNumber.from(0)])
       })
     })
 
@@ -462,8 +544,8 @@ describe('NirnVault', () => {
           [adapter1.address, adapter2.address],
           [getBigNumber(5, 17), getBigNumber(5, 17)]
         )
-        let apr1 = await adapter1.getHypotheticalAPR(getBigNumber(45, 16))
-        let apr2 = await adapter2.getHypotheticalAPR(getBigNumber(45, 16))
+        let apr1 = await adapter1.getHypotheticalAPR(getBigNumber(45, 17))
+        let apr2 = await adapter2.getHypotheticalAPR(getBigNumber(45, 17))
         expect(await vault.getAPRs()).to.deep.eq([apr1, apr2])
       })
     })
