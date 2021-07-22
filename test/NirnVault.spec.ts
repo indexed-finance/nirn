@@ -228,14 +228,14 @@ describe('NirnVault', () => {
   describe('withdraw()', () => {
     beforeEach(() => reset(true))
 
-    it('Should withdraw from vault if it has sufficient reserves', async () => {
+    it('Should send from vault if it has sufficient reserves', async () => {
       await expect(vault.withdraw(getBigNumber(5)))
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, getBigNumber(5))
       expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(5))
     })
 
-    it('Should withdraw from adapter if vault has insufficient reserves', async () => {
+    it('Should withdraw from adapters if vault has insufficient reserves', async () => {
       await vault.rebalance()
       await expect(vault.withdraw(getBigNumber(5)))
         .to.emit(underlying, 'Transfer')
@@ -261,7 +261,7 @@ describe('NirnVault', () => {
       expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(4))
     })
 
-    it('Should claim fees', async () => {
+    it('Should claim fees if any are owed', async () => {
       await underlying.mint(vault.address, getBigNumber(10))
       await vault.rebalance()
       const fees = getBigNumber(5, 17);
