@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { BigNumber, constants, Contract, ContractTransaction } from 'ethers'
 import { waffle } from 'hardhat'
-import { getContract, sendTokenTo, getBigNumber, deployClone, sendTokenToFrom, getTokenDecimals, createSnapshot } from './shared'
+import { getContract, sendTokenTo, getBigNumber, deployClone, sendTokenToFrom, getTokenDecimals, createSnapshot, createBalanceCheckpoint } from './shared'
 import { ConvertHelper } from './shared/conversion'
 import { IERC20, IErc20Adapter } from '../typechain'
 import { formatEther } from '@ethersproject/units'
@@ -138,11 +138,11 @@ export function shouldBehaveLikeErc20AdapterWithdrawAll() {
 
   it('Should burn all caller wrapper token and redeem underlying', async function () {
     const wBalance = await this.wrapper.balanceOf(this.depositReceiverWrapped, { blockTag: 'pending' })
-    const balanceBefore = await this.underlying.balanceOf(this.wallet.address)
-    this.amountDeposited = await this.toUnderlying(wBalance)
+    const getBalanceChange = await createBalanceCheckpoint(this.underlying, this.wallet.address)
+    const expectedChange = await this.toUnderlying(wBalance)
     await this.adapter.withdrawAll()
-    const balanceAfter = await this.underlying.balanceOf(this.wallet.address)
-    expect(balanceAfter.sub(balanceBefore)).to.eq(this.amountDeposited)
+    const balanceChange = await getBalanceChange()
+    expect(balanceChange).to.eq(expectedChange)
     expect(await this.wrapper.balanceOf(this.wallet.address)).to.eq(0)
   })
 }
@@ -275,6 +275,31 @@ export function shouldBehaveLikeErc20AdapterQueries() {
       const wBalance = await this.adapter.balanceWrapped({ blockTag: 'pending' })
       expect(await this.adapter.balanceUnderlying({ blockTag: 'pending' })).to.eq(await this.toUnderlying(wBalance))
       expect(await this.adapter.connect(this.wallet1).balanceUnderlying()).to.eq(0)
+    })
+  })
+
+  describe('getRevenueBreakdown()', () => {
+    before(function() {return this.resetTests()})
+
+    it('Should return list of assets and relative interest rates', async function () {
+      const breakdown = await this.adapter.getRevenueBreakdown()
+      const expectedTokens = [this.underlying.address]
+      const expectedAPRs: BigNumber[] = []
+      if (this.converter.getRewardsTokenAndAPR) {
+        const [rewardsToken, rewardsAPR] = await this.converter.getRewardsTokenAndAPR(this.adapter)
+        const apr = await this.adapter.getAPR()
+        if (rewardsToken === '') {
+          expectedAPRs.push(apr)
+        } else {
+          expectedTokens.push(rewardsToken)
+          const baseAPR = apr.sub(rewardsAPR)
+          expectedAPRs.push(baseAPR, rewardsAPR)
+        }
+      } else {
+        expectedAPRs.push(await this.adapter.getAPR()) 
+      }
+      expect(breakdown.assets).to.deep.eq(expectedTokens)
+      expect(breakdown.aprs).to.deep.eq(expectedAPRs)
     })
   })
 

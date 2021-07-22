@@ -1,12 +1,12 @@
 import { BigNumber } from "ethers";
-import { ICToken, IERC20, IToken } from "../../typechain";
+import { AaveV2Erc20Adapter, CErc20Adapter, ICToken, IERC20, IErc20Adapter, IToken } from "../../typechain";
 import { getBigNumber, getContract } from "./utils";
 
 export interface ConvertHelper {
   liquidityHolder(token: IERC20): Promise<string>;
   toWrapped(token: IERC20, amount: BigNumber, withdrawUnderlying?: boolean): Promise<BigNumber>;
   toUnderlying(token: IERC20, amount: BigNumber): Promise<BigNumber>;
-  reduceLiquidity?: (token: IERC20, amount: BigNumber) => Promise<void>;
+  getRewardsTokenAndAPR?: (adapter: IErc20Adapter) => Promise<[string, BigNumber]>
   protocolName: string;
   symbolPrefix: string;
 }
@@ -23,18 +23,31 @@ export const CompoundConverter: ConvertHelper = {
     const rate = await c.callStatic.exchangeRateCurrent({ blockTag: 'pending' });
     return amount.mul(rate).div(getBigNumber(1));
   },
+  getRewardsTokenAndAPR: async (adapter): Promise<[string, BigNumber]> => {
+    const cAdapter: CErc20Adapter = await getContract(adapter.address, 'CErc20Adapter')
+    const rewardsAPR = await cAdapter.getRewardsAPR()
+    if (rewardsAPR.eq(0)) return ['', rewardsAPR]
+    return [
+      '0xc00e94Cb662C3520282E6f5717214004A7f26888',
+      rewardsAPR
+    ]
+  },
   protocolName: 'Compound',
   symbolPrefix: 'c'
 }
 
 export const CreamConverter = {
-  ...CompoundConverter,
+  liquidityHolder: CompoundConverter.liquidityHolder,
+  toWrapped: CompoundConverter.toWrapped,
+  toUnderlying: CompoundConverter.toUnderlying,
   protocolName: 'Cream',
   symbolPrefix: 'cr'
 };
 
 export const IronBankConverter = {
-  ...CompoundConverter,
+  liquidityHolder: CompoundConverter.liquidityHolder,
+  toWrapped: CompoundConverter.toWrapped,
+  toUnderlying: CompoundConverter.toUnderlying,
   protocolName: 'IronBank',
   symbolPrefix: 'cy'
 };
@@ -51,17 +64,21 @@ export const AaveV2Converter: ConvertHelper = {
   liquidityHolder: async (token) => token.address,
   toWrapped: async (_, amount) => { return amount; },
   toUnderlying: async (_, amount) => { return amount; },
+  getRewardsTokenAndAPR: async (adapter): Promise<[string, BigNumber]> => {
+    const aAdapter: AaveV2Erc20Adapter = await getContract(adapter.address, 'AaveV2Erc20Adapter')
+    const rewardsAPR = await aAdapter.getRewardsAPR()
+    if (rewardsAPR.eq(0)) return ['', rewardsAPR]
+    return [
+      '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
+      rewardsAPR
+    ]
+  },
   protocolName: 'Aave V2',
   symbolPrefix: 'a'
 }
 
 export const FulcrumConverter: ConvertHelper = {
   liquidityHolder: async (token) => token.address,
-  toUnderlying: async (token, amount) => {
-    const c: IToken = await getContract(token.address, 'IToken');
-    const rate = await c.tokenPrice({ blockTag: 'pending' });
-    return amount.mul(rate).div(getBigNumber(1));
-  },
   toWrapped: async (token, amount, withdrawUnderlying?: boolean) => {
     const c: IToken = await getContract(token.address, 'IToken');
     const rate = await c.tokenPrice({ blockTag: 'pending' });
@@ -70,6 +87,11 @@ export const FulcrumConverter: ConvertHelper = {
       q = q.add(1);
     }
     return q;
+  },
+  toUnderlying: async (token, amount) => {
+    const c: IToken = await getContract(token.address, 'IToken');
+    const rate = await c.tokenPrice({ blockTag: 'pending' });
+    return amount.mul(rate).div(getBigNumber(1));
   },
   protocolName: 'Fulcrum',
   symbolPrefix: 'i',
