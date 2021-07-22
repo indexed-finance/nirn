@@ -16,7 +16,7 @@ import "./ERC20.sol";
  * @dev Base contract defining the constant and storage variables
  * for NirnVault, as well as basic state queries and setters.
  */
-contract NirnVaultBase is ERC20, Ownable(), INirnVault {
+abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   using SafeCast for uint256;
   using TransferHelper for address;
   using Fraction for uint256;
@@ -152,14 +152,23 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   function setPerformanceFee(uint64 _performanceFee) external override onlyOwner {
     require(_performanceFee <= 2e17, "fee >20%");
     performanceFee = _performanceFee;
+    emit SetPerformanceFee(_performanceFee);
+  }
+
+  function setReserveRatio(uint64 _reserveRatio) external override onlyOwner {
+    require(_reserveRatio <= 2e17, "reserve >20%");
+    reserveRatio = _reserveRatio;
+    emit SetReserveRatio(_reserveRatio);
   }
 
   function setFeeRecipient(address _feeRecipient) external override onlyOwner {
     feeRecipient = _feeRecipient;
+    emit SetFeeRecipient(_feeRecipient);
   }
 
   function setRewardsSeller(IRewardsSeller _rewardsSeller) external override onlyOwner {
     rewardsSeller = _rewardsSeller;
+    emit SetRewardsSeller(address(_rewardsSeller));
   }
 
 /* ========== Reward Token Sale ========== */
@@ -224,7 +233,7 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     return profit.mulFractionE18(performanceFee);
   }
 
-  function getPendingFees() public view override returns (uint256) {
+  function getPendingFees() external view override returns (uint256) {
     return calculateFee(balance(), totalSupply);
   }
 
@@ -244,11 +253,11 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
 /* ========== Price Queries ========== */
 
-  function getPricePerFullShare() public view override returns (uint256) {
+  function getPricePerFullShare() external view override returns (uint256) {
     return balance().toFractionE18(totalSupply);
   }
 
-  function getPricePerFullShareWithFee() public view override returns (uint256) {
+  function getPricePerFullShareWithFee() external view override returns (uint256) {
     uint256 totalBalance = balance();
     uint256 supply = totalSupply;
     uint256 pendingFees = calculateFee(totalBalance, supply);

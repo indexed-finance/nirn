@@ -386,7 +386,7 @@ describe('NirnVault', () => {
   })
 
   describe('claimFees()', () => {
-    beforeEach(() => reset(true))
+    setupTests(true)
 
     it('Should claim fees and update priceAtLastFee', async () => {
       await vault.setPerformanceFee(getBigNumber(1, 17))
