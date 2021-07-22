@@ -196,6 +196,22 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
 /* ========== Underlying Balance Queries ========== */
 
+  struct BalanceSheet {
+    uint256[] balances;
+    uint256 reserveBalance;
+    uint256 totalBalance;
+    uint256 totalProductiveBalance;
+  }
+
+  function getBalanceSheet(
+    IErc20Adapter[] memory adapters
+  ) internal view returns (BalanceSheet memory sheet) {
+    sheet.balances = adapters.getBalances();
+    sheet.reserveBalance = reserveBalance();
+    sheet.totalBalance = sheet.balances.sum().add(sheet.reserveBalance);
+    sheet.totalProductiveBalance = sheet.totalBalance.mulSubFractionE18(reserveRatio);
+  }
+
   /**
    * @dev Returns the value in `underlying` of the vault's deposits
    * in each adapter.
