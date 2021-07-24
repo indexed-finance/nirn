@@ -61,7 +61,7 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
    * @dev Mapping from wrapper tokens to adapters.
    * Used to determine whether to approve the adapter for the
    * wrapper & whether the wrapper can be sold.
-  */
+   */
   mapping(address => address) public override wrapperAdapters;
 
   /** @dev Account that receives performance fees. */
