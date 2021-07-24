@@ -210,7 +210,7 @@ contract NirnVault is NirnVaultBase {
     RebalanceValidation.validateProposedWeights(params.weights, proposedWeights);
     // Get liquidity deltas and APR for new weights
     int256[] memory proposedLiquidityDeltas = AdapterHelper.getLiquidityDeltas(totalProductiveBalance, params.balances, proposedWeights);
-    uint256 proposedAPR = AdapterHelper.getNetAPR(params.adapters, proposedWeights, proposedLiquidityDeltas);
+    uint256 proposedAPR = AdapterHelper.getNetAPR(params.adapters, proposedWeights, proposedLiquidityDeltas).mulSubFractionE18(reserveRatio);
     // Validate rebalance results in sufficient APR improvement
     RebalanceValidation.validateSufficientImprovement(params.netAPR, proposedAPR, minimumAPRImprovement);
     // Rebalance and remove adapters with 0 weight which the vault could fully exit.
