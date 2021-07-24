@@ -13,7 +13,6 @@ import {
 import '../interfaces/CompoundInterfaces.sol';
 import '../interfaces/FulcrumInterfaces.sol';
 import { IFusePoolDirectory, IFusePool } from "../interfaces/FuseInterfaces.sol";
-import '../interfaces/YearnInterfaces.sol';
 import {ReserveConfigurationLib} from '../libraries/ReserveConfigurationLib.sol';
 import '../libraries/SymbolHelper.sol';
 import 'hardhat/console.sol';
@@ -27,7 +26,6 @@ contract TestMapper {
   IComptroller internal constant CREAM = IComptroller(0x3d5BC3c8d13dcB8bF317092d84783c2697AE9258);
   IComptroller internal constant IRON = IComptroller(0xAB1c342C7bf5Ec5F02ADEA1c2270670bCa144CbB);
   IBZX internal constant BZX = IBZX(0xD8Ee69652E4e4838f2531732a46d1f7F584F0b7f);
-  IYearnRegistry internal constant YEARN = IYearnRegistry(0x3eE41C098f9666ed2eA246f4D2558010e59d63A0);
   address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
   IFusePoolDirectory internal constant FUSE = IFusePoolDirectory(0x835482FE0532f169024d5E9410199369aAD5C77E);
 
@@ -218,63 +216,6 @@ contract TestMapper {
           )
         )
       );
-    }
-  }
-
-  function yearn() external view {
-
-    IVault[] memory IVaultsAddresses = YEARN.getVaults();
-    uint256 len = IVaultsAddresses.length;
-    address[] memory vaultsAddresses = new address[](len);
-    for (uint256 i = 0 ; i < IVaultsAddresses.length;i++) {
-      console.log('addresses...', address(IVaultsAddresses[i]));
-       vaultsAddresses[i] = address(IVaultsAddresses[i]);
-    }
-    //address[] memory vaultsAddresses = YEARN.getVaults();
-
-    //uint256 len = vaultsAddresses.length;
-    for (uint256 i = 0; i < len; i++) {
-      address vault = vaultsAddresses[i];
-      (
-        ,address underlying,,
-        bool isWrapped,
-        bool isDelegated
-      ) = YEARN.getVaultInfo(vault);
-      string memory symbol = underlying == WETH ? 'ETH' : SymbolHelper.getSymbol(underlying);
-      string memory ySymbol = SymbolHelper.getSymbol(vault);
-      
-      // Print info
-      console.log(
-        string(
-          abi.encodePacked(
-            "yToken: ",
-            ySymbol,
-            " (0x",
-            toAsciiString(vault),
-            ") | Underlying: ",
-            symbol,
-            " (0x",
-            toAsciiString(underlying),
-            ")",
-            isWrapped ? " | Wrapped" : "",
-            isDelegated ? " | Delegated" : ""
-          )
-        )
-      );
-      // Print commands to test vaults
-      // console.log(
-      //   string(
-      //     abi.encodePacked(
-      //       "testAdapter(getAddress('0x",
-      //       toAsciiString(underlying),
-      //       "'), getAddress('0x",
-      //       toAsciiString(vault),
-      //       "'), '",
-      //       symbol,
-      //       "');"
-      //     )
-      //   )
-      // );
     }
   }
 
