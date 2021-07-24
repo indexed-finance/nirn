@@ -178,7 +178,7 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     uint256 _balance = IERC20(rewardsToken).balanceOf(address(this));
     require(!lockedTokens[rewardsToken] && rewardsToken != underlying, "token locked");
     IRewardsSeller _rewardsSeller = rewardsSeller;
-    require(address(_rewardsSeller) != address(0), "!seller");
+    require(address(_rewardsSeller) != address(0), "null seller");
     rewardsToken.safeTransfer(address(_rewardsSeller), _balance);
     _rewardsSeller.sellRewards(msg.sender, rewardsToken, underlying, params);
   }
