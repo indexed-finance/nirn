@@ -33,6 +33,9 @@ export default {
     timeout: 200000
   },
   networks: {
+    coverage: {
+      url: 'http://localhost:8555'
+    },
     hardhat: {
       allowUnlimitedContractSize: false,
       forking: {
