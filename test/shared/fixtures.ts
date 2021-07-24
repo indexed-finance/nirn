@@ -7,8 +7,8 @@ export async function deployTestWrapperAndAdapter(
   underlying: string,
   apr: BigNumber = getBigNumber(1, 17)
 ) {
-  const adapter: TestAdapter = await deployContract('TestAdapter', underlying, apr) // 10% apr
-  const wrapper: TestVault = await getContract(await adapter.token(), 'TestVault')
+  const wrapper: TestVault = await deployContract('TestVault', underlying);
+  const adapter: TestAdapter = await deployContract('TestAdapter', underlying, wrapper.address, apr) // 10% apr
   return { adapter, wrapper };
 }
 
