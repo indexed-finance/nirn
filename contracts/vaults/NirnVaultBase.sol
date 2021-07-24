@@ -57,12 +57,8 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
 /* ========== Storage ========== */
 
-  /**
-   * @dev Mapping from wrapper tokens to adapters.
-   * Used to determine whether to approve the adapter for the
-   * wrapper & whether the wrapper can be sold.
-   */
-  mapping(address => address) public override wrapperAdapters;
+  /** @dev Tokens which can not be sold - wrapper tokens used by the adapters. */
+  mapping(address => bool) public override lockedTokens;
 
   /** @dev Account that receives performance fees. */
   address public override feeRecipient;
@@ -145,7 +141,7 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     _underlying.safeApproveMax(adapter);
     address wrapper = IErc20Adapter(adapter).token();
     wrapper.safeApproveMax(adapter);
-    wrapperAdapters[wrapper] = adapter;
+    lockedTokens[wrapper] = true;
 
     name = SymbolHelper.getPrefixedName("Indexed ", _underlying);
     symbol = SymbolHelper.getPrefixedSymbol("n", _underlying);
@@ -180,7 +176,7 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
   function sellRewards(address rewardsToken, bytes calldata params) external override onlyEOA {
     uint256 _balance = IERC20(rewardsToken).balanceOf(address(this));
-    require(wrapperAdapters[rewardsToken] == address(0) && rewardsToken != underlying, "token locked");
+    require(!lockedTokens[rewardsToken] && rewardsToken != underlying, "token locked");
     IRewardsSeller _rewardsSeller = rewardsSeller;
     require(address(_rewardsSeller) != address(0), "!seller");
     rewardsToken.safeTransfer(address(_rewardsSeller), _balance);
@@ -291,8 +287,8 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
   function beforeAddAdapter(IErc20Adapter adapter) internal {
     address wrapper = adapter.token();
-    if (wrapperAdapters[wrapper] == address(adapter)) return;
-    wrapperAdapters[wrapper] = address(adapter);
+    if (IERC20(wrapper).allowance(address(this), address(adapter)) > 0) return;
+    lockedTokens[wrapper] = true;
     underlying.safeApproveMax(address(adapter));
     wrapper.safeApproveMax(address(adapter));
   }
