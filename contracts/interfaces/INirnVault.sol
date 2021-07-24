@@ -15,16 +15,22 @@ interface INirnVault {
   /** @dev Emitted when weights or adapters are updated. */
   event AllocationsUpdated(IErc20Adapter[] adapters, uint256[] weights);
 
+  /** @dev Emitted when performance fees are claimed. */
   event FeesClaimed(uint256 underlyingAmount, uint256 sharesMinted);
 
+  /** @dev Emitted when a rebalance happens without allocation changes. */
   event Rebalanced();
 
+  /** @dev Emitted when fee recipient address is set. */
   event SetFeeRecipient(address feeRecipient);
 
+  /** @dev Emitted when performance fee is set. */
   event SetPerformanceFee(uint256 performanceFee);
 
+  /** @dev Emitted when reserve ratio is set. */
   event SetReserveRatio(uint256 reserveRatio);
 
+  /** @dev Emitted when rewards seller contract is set. */
   event SetRewardsSeller(address rewardsSeller);
 
 /* ========== Config Queries ========== */
