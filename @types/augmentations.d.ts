@@ -7,7 +7,7 @@ interface ConvertHelper {
   liquidityHolder(token: IERC20): Promise<string>;
   toWrapped(token: IERC20, amount: BigNumber, withdrawUnderlying?: boolean): Promise<BigNumber>;
   toUnderlying(token: IERC20, amount: BigNumber): Promise<BigNumber>;
-  reduceLiquidity?: (token: IERC20, amount: BigNumber) => Promise<void>;
+  getRewardsTokenAndAPR?: (adapter: IErc20Adapter) => Promise<[string, BigNumber]>
   protocolName: string;
   symbolPrefix: string;
 }
