@@ -55,7 +55,7 @@ export const setupAdapterContext = (
       return tokenAmount
     }
 
-    this.adapter = await deployClone(await getImplementation())
+    this.adapter = await getImplementation()
     await initialize(this.adapter, this.underlying, this.wrapper)
     await this.underlying.approve(this.adapter.address, constants.MaxUint256)
     await this.wrapper.approve(this.adapter.address, constants.MaxUint256)
