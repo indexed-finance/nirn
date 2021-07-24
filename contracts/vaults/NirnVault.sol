@@ -6,6 +6,7 @@ import "../libraries/RebalanceValidation.sol";
 import "../libraries/SafeCast.sol";
 import "./NirnVaultBase.sol";
 
+
 contract NirnVault is NirnVaultBase {
   using Fraction for uint256;
   using TransferHelper for address;
