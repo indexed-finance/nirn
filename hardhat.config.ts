@@ -7,7 +7,6 @@ import '@nomiclabs/hardhat-waffle'
 import 'hardhat-deploy'
 import 'solidity-coverage'
 import 'hardhat-gas-reporter'
-import { proxyResolver } from './test/shared/proxyResolution'
 import { randomBytes } from 'crypto';
 
 const configureNetwork = (network: string, chainId: number) => ({
