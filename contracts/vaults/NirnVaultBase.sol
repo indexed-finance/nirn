@@ -194,7 +194,6 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
       "!unused"
     );
     require(registry.isApprovedAdapter(address(adapter)), "!approved");
-    require(adapter.underlying() == underlying, "bad adapter");
     uint256 bal = adapter.balanceUnderlying();
     adapter.withdrawUnderlyingUpTo(bal);
   }
