@@ -6,7 +6,6 @@ import "../libraries/RebalanceValidation.sol";
 import "../libraries/SafeCast.sol";
 import "./NirnVaultBase.sol";
 
-
 contract NirnVault is NirnVaultBase {
   using Fraction for uint256;
   using TransferHelper for address;
@@ -139,7 +138,15 @@ contract NirnVault is NirnVaultBase {
     uint256 supply = claimFees(balanceSheet.totalBalance, totalSupply);
     owed = shares.mul(balanceSheet.totalBalance) / supply;
     _burn(msg.sender, shares);
-    withdrawToMatchAmount(adapters, weights, balanceSheet.balances, balanceSheet.reserveBalance, owed);
+    uint256 newReserves = balanceSheet.totalBalance.sub(owed).mulFractionE18(reserveRatio);
+    withdrawToMatchAmount(
+      adapters,
+      weights,
+      balanceSheet.balances,
+      balanceSheet.reserveBalance,
+      owed,
+      newReserves
+    );
     _transferOut(msg.sender, owed);
   }
 
@@ -148,7 +155,8 @@ contract NirnVault is NirnVaultBase {
     uint256[] memory weights,
     uint256[] memory balances,
     uint256 _reserveBalance,
-    uint256 amount
+    uint256 amount,
+    uint256 newReserves
   ) internal {
     if (amount > _reserveBalance) {
       uint256 remainder = amount.sub(_reserveBalance);
@@ -157,7 +165,12 @@ contract NirnVault is NirnVaultBase {
       for (uint256 i; i < len; i++) {
         uint256 bal = balances[i];
         if (bal == 0) continue;
-        uint256 amountToWithdraw = remainder > bal ? bal : remainder;
+        // If the balance is sufficient to withdraw both the remainder and the new reserves,
+        // withdraw the remainder and the new reserves. Otherwise, withdraw the balance.
+        uint256 optimalWithdrawal = remainder.add(newReserves);
+        uint256 amountToWithdraw = bal > optimalWithdrawal
+          ? optimalWithdrawal
+          : bal;
         uint256 amountWithdrawn = adapters[i].withdrawUnderlyingUpTo(amountToWithdraw);
         remainder = remainder >= amountWithdrawn ? remainder - amountWithdrawn : 0;
         if (weights[i] == 0 && amountWithdrawn == bal) {

@@ -31,9 +31,17 @@ contract TestNirnVault is NirnVault {
     uint256[] calldata weights,
     uint256[] calldata balances,
     uint256 _reserveBalance,
-    uint256 amount
+    uint256 amount,
+    uint256 newReserves
   ) external {
-    return withdrawToMatchAmount(adapters, weights, balances, _reserveBalance, amount);
+    return withdrawToMatchAmount(
+      adapters,
+      weights,
+      balances,
+      _reserveBalance,
+      amount,
+      newReserves
+    );
   }
 
   function currentDistributionInternal() external view returns (
@@ -42,5 +50,24 @@ contract TestNirnVault is NirnVault {
     uint256 _reserveBalance
   ) {
     return currentDistribution();
+  }
+
+  function balanceSheetInternal() external view returns (BalanceSheet memory) {
+    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
+    return getBalanceSheet(adapters);
+  }
+
+  function processProposedDistributionInternal(
+    DistributionParameters calldata currentParams,
+    uint256 totalProductiveBalance,
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external view returns (DistributionParameters memory params) {
+    return processProposedDistribution(
+      currentParams,
+      totalProductiveBalance,
+      proposedAdapters,
+      proposedWeights
+    );
   }
 }
