@@ -66,6 +66,12 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   /** @dev Address of contract used to sell rewards. */
   IRewardsSeller public override rewardsSeller;
 
+  /**
+   * @dev Maximum underlying balance that can be deposited.
+   * If zero, no maximum.
+   */
+  uint256 public override maximumUnderlying;
+
   /** @dev Fee taken on profit as a fraction of 1e18. */
   uint64 public override performanceFee = 5e16;
 
@@ -148,6 +154,11 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   }
 
 /* ========== Configuration Controls ========== */
+
+  function setMaximumUnderlying(uint256 _maximumUnderlying) external override onlyOwner {
+    maximumUnderlying = _maximumUnderlying;
+    emit SetMaximumUnderlying(_maximumUnderlying);
+  }
 
   function setPerformanceFee(uint64 _performanceFee) external override onlyOwner {
     claimFees(balance(), totalSupply);

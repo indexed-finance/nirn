@@ -128,6 +128,10 @@ contract NirnVault is NirnVaultBase {
 
   function depositTo(uint256 amount, address to) public override returns (uint256 shares) {
     uint256 bal = balance();
+    uint256 max = maximumUnderlying;
+    if (max > 0) {
+      require(bal.add(amount) <= max, "maximumUnderlying");
+    }
     underlying.safeTransferFrom(msg.sender, address(this), amount);
     uint256 supply = claimFees(bal, totalSupply);
     shares = supply == 0 ? amount : amount.mul(supply) / bal;

@@ -370,6 +370,25 @@ describe('NirnVault', () => {
   describe('Configuration controls', () => {
     beforeEach(() => reset(true))
 
+    describe('setMaximumUnderlying()', () => {
+      it('Should revert if caller is not owner', async () => {
+        await expect(
+          vault.connect(wallet1).setMaximumUnderlying(0)
+        ).to.be.revertedWith('Ownable: caller is not the owner')
+      })
+
+      it('Should let owner set maximum underlying', async () => {
+        await vault.setMaximumUnderlying(ONE_E18)
+        expect(await vault.maximumUnderlying()).to.eq(ONE_E18)
+      })
+
+      it('Should emit SetMaximumUnderlying', async () => {
+        await expect(vault.setMaximumUnderlying(ONE_E18))
+          .to.emit(vault, 'SetMaximumUnderlying')
+          .withArgs(ONE_E18)
+      })
+    })
+
     describe('setPerformanceFee()', () => {
       it('Should revert if caller is not owner', async () => {
         await expect(
@@ -400,6 +419,12 @@ describe('NirnVault', () => {
           .to.emit(vault, 'FeesClaimed')
           .withArgs(fees, feeShares)
       })
+
+      it('Should emit SetPerformanceFee', async () => {
+        await expect(vault.setPerformanceFee(getBigNumber(1, 17)))
+          .to.emit(vault, 'SetPerformanceFee')
+          .withArgs(getBigNumber(1, 17))
+      })
     })
 
     describe('setReserveRatio()', () => {
@@ -419,6 +444,12 @@ describe('NirnVault', () => {
         await vault.setReserveRatio(getBigNumber(2, 17))
         expect(await vault.reserveRatio()).to.eq(getBigNumber(2, 17))
       })
+
+      it('Should emit SetReserveRatio', async () => {
+        await expect(vault.setReserveRatio(getBigNumber(1, 17)))
+          .to.emit(vault, 'SetReserveRatio')
+          .withArgs(getBigNumber(1, 17))
+      })
     })
 
     describe('setFeeRecipient()', () => {
@@ -432,6 +463,12 @@ describe('NirnVault', () => {
         await vault.setFeeRecipient(wallet.address)
         expect(await vault.feeRecipient()).to.eq(wallet.address)
       })
+
+      it('Should emit SetFeeRecipient', async () => {
+        await expect(vault.setFeeRecipient(wallet.address))
+          .to.emit(vault, 'SetFeeRecipient')
+          .withArgs(wallet.address)
+      })
     })
 
     describe('setRewardsSeller()', () => {
@@ -444,6 +481,12 @@ describe('NirnVault', () => {
       it('Should let owner set rewards seller', async () => {
         await vault.setRewardsSeller(wallet.address)
         expect(await vault.rewardsSeller()).to.eq(wallet.address)
+      })
+
+      it('Should emit SetRewardsSeller', async () => {
+        await expect(vault.setRewardsSeller(wallet.address))
+          .to.emit(vault, 'SetRewardsSeller')
+          .withArgs(wallet.address)
       })
     })
   })
@@ -511,10 +554,15 @@ describe('NirnVault', () => {
   })
 
   describe('deposit()', () => {
-    setupTests()
+    beforeEach(() => reset())
 
     it('Should revert if caller has insufficient balance/allowance', async () => {
       await expect(vault.deposit(ONE_E18)).to.be.revertedWith('TH:STF')
+    })
+
+    it('Should revert if new underlying amount', async () => {
+      await vault.setMaximumUnderlying(getBigNumber(5, 17))
+      await expect(vault.deposit(ONE_E18)).to.be.revertedWith('maximumUnderlying')
     })
 
     it('Should mint 1 vault token per underlying on first deposit', async () => {
@@ -528,6 +576,7 @@ describe('NirnVault', () => {
     })
 
     it('Should claim fees before deposit', async () => {
+      await deposit(TEN_E18)
       await underlying.mint(vault.address, TEN_E18)
       const fees = getBigNumber(5, 17)
       const feeShares = fees.mul(TEN_E18).div(getBigNumber(195, 17))

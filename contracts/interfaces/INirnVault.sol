@@ -21,6 +21,9 @@ interface INirnVault {
   /** @dev Emitted when a rebalance happens without allocation changes. */
   event Rebalanced();
 
+  /** @dev Emitted when max underlying is updated. */
+  event SetMaximumUnderlying(uint256 maxBalance);
+
   /** @dev Emitted when fee recipient address is set. */
   event SetFeeRecipient(address feeRecipient);
 
@@ -45,13 +48,15 @@ interface INirnVault {
 
   function name() external view returns (string memory);
 
-  function symbol() external view returns (string memory);
+  function symbol() external view returns (string memory);  
 
   function feeRecipient() external view returns (address);
 
   function rewardsSeller() external view returns (IRewardsSeller);
 
   function lockedTokens(address) external view returns (bool);
+
+  function maximumUnderlying() external view returns (uint256);
 
   function performanceFee() external view returns (uint64);
 
@@ -60,6 +65,8 @@ interface INirnVault {
   function priceAtLastFee() external view returns (uint128);
 
 /* ========== Admin Actions ========== */
+
+  function setMaximumUnderlying(uint256 _maximumUnderlying) external;
 
   function setPerformanceFee(uint64 _performanceFee) external;
 
