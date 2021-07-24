@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
+pragma abicoder v2;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../libraries/RebalanceValidation.sol";
@@ -197,6 +198,7 @@ contract NirnVault is NirnVaultBase {
       balanceSheet.reserveBalance
     );
     removeAdapters(removedIndices);
+    emit Rebalanced();
   }
 
   function rebalanceWithNewWeights(uint256[] memory proposedWeights) external override onlyEOA {
