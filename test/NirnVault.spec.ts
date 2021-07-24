@@ -1,9 +1,9 @@
 import { expect } from "chai";
 import { BigNumber, constants, ContractTransaction } from "ethers";
 import { waffle } from "hardhat";
-import { AdapterRegistry, TestAdapter, TestNirnVault, TestERC20, TestVault } from "../typechain"
+import { AdapterRegistry, TestAdapter, TestNirnVault, TestERC20, TestVault, CallForwarder, TestRewardsSeller } from "../typechain"
 import { createBalanceCheckpoint, createSnapshot, deployContract, getBigNumber } from "./shared";
-import { deployTestAdaptersAndRegistry } from "./shared/fixtures";
+import { deployTestAdaptersAndRegistry, deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
 
 const diff = (expected: BigNumber, actual: BigNumber) => expected.sub(actual).abs();
 const ONE_E18 = getBigNumber(1)
@@ -12,7 +12,7 @@ const TEN_E18 = getBigNumber(10)
 const toReserve = (n: BigNumber) => n.div(10)
 
 describe('NirnVault', () => {
-  const [wallet, feeRecipient] = waffle.provider.getWallets()
+  const [wallet, wallet1, protocolAdapter, feeRecipient] = waffle.provider.getWallets()
 
   let underlying: TestERC20
   let registry: AdapterRegistry
@@ -46,10 +46,11 @@ describe('NirnVault', () => {
     restoreSnapshot = await createSnapshot()
   })
 
-  const reset = async (withDeposit = false) => {
+  const reset = async (withDeposit = false, rebalance = false) => {
     await restoreSnapshot()
     if (withDeposit) {
       await deposit(TEN_E18)
+      if (rebalance) await vault.rebalance()
     }
   }
 
@@ -60,8 +61,8 @@ describe('NirnVault', () => {
   describe('Constructor', () => {
     setupTests()
 
-    it('Should add wrapper to wrapperAdapters', async () => {
-      expect(await vault.wrapperAdapters(wrapper1.address)).to.eq(adapter1.address)
+    it('Should add wrapper to lockedTokens', async () => {
+      expect(await vault.lockedTokens(wrapper1.address)).to.be.true
     })
 
     it('Should set reserveRatio to 10%', async () => {
@@ -122,7 +123,7 @@ describe('NirnVault', () => {
       })
   
       it('Should mark wrapper as locked', async () => {
-        expect(await vault.wrapperAdapters(wrapper2.address)).to.eq(adapter2.address)
+        expect(await vault.lockedTokens(wrapper2.address)).to.be.true
       })
     })
 
@@ -196,7 +197,7 @@ describe('NirnVault', () => {
       it('Should revert if new distribution does not improve APR', async () => {
         await vault.rebalance()
         const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
-        expect(
+        await expect(
           vault.processProposedDistributionInternal(
             currentParams,
             totalProductiveBalance,
@@ -269,6 +270,22 @@ describe('NirnVault', () => {
             getBigNumber(12),
           )
         ).to.not.be.reverted
+      })
+
+      it('Should skip adapters with 0 balance', async () => {
+        await vault.rebalance()
+        await expect(
+          vault.withdrawToMatchAmountInternal(
+            [adapter2.address, adapter1.address],
+            [1, 1],
+            [0, getBigNumber(9)],
+            getBigNumber(1),
+            getBigNumber(2),
+            0
+          )
+        )
+          .to.emit(underlying, 'Transfer')
+          .withArgs(adapter1.address, vault.address, ONE_E18)
       })
 
       it('Should remove adapters with weight 0 and full balance withdrawn', async () => {
@@ -350,6 +367,149 @@ describe('NirnVault', () => {
     })
   })
 
+  describe('Configuration controls', () => {
+    beforeEach(() => reset(true))
+
+    describe('setPerformanceFee()', () => {
+      it('Should revert if caller is not owner', async () => {
+        await expect(
+          vault.connect(wallet1).setPerformanceFee(0)
+        ).to.be.revertedWith('Ownable: caller is not the owner')
+      })
+
+      it('Should revert if performance fee > 20%', async () => {
+        await expect(
+          vault.setPerformanceFee(getBigNumber(3, 17))
+        ).to.be.revertedWith('fee > 20%')
+      })
+
+      it('Should let owner set performance fee', async () => {
+        await vault.setPerformanceFee(getBigNumber(1, 17))
+        expect(await vault.performanceFee()).to.eq(getBigNumber(1, 17))
+      })
+
+      it('Should claim current fees before changing performanceFee', async () => {
+        await underlying.mint(vault.address, getBigNumber(10))
+        const fees = getBigNumber(10).mul(getBigNumber(5, 16)).div(getBigNumber(1))
+        const feeShares = fees.mul(TEN_E18).div(getBigNumber(20).sub(fees))
+        await expect(
+          vault.setPerformanceFee(getBigNumber(1, 17))
+        )
+          .to.emit(vault, 'Transfer')
+          .withArgs(constants.AddressZero, feeRecipient.address, feeShares)
+          .to.emit(vault, 'FeesClaimed')
+          .withArgs(fees, feeShares)
+      })
+    })
+
+    describe('setReserveRatio()', () => {
+      it('Should revert if caller is not owner', async () => {
+        await expect(
+          vault.connect(wallet1).setReserveRatio(0)
+        ).to.be.revertedWith('Ownable: caller is not the owner')
+      })
+
+      it('Should revert if reserve ratio > 20%', async () => {
+        await expect(
+          vault.setReserveRatio(getBigNumber(3, 17))
+        ).to.be.revertedWith('reserve > 20%')
+      })
+
+      it('Should let owner set reserve ratio', async () => {
+        await vault.setReserveRatio(getBigNumber(2, 17))
+        expect(await vault.reserveRatio()).to.eq(getBigNumber(2, 17))
+      })
+    })
+
+    describe('setFeeRecipient()', () => {
+      it('Should revert if caller is not owner', async () => {
+        await expect(
+          vault.connect(wallet1).setFeeRecipient(constants.AddressZero)
+        ).to.be.revertedWith('Ownable: caller is not the owner')
+      })
+
+      it('Should let owner set fee recipient', async () => {
+        await vault.setFeeRecipient(wallet.address)
+        expect(await vault.feeRecipient()).to.eq(wallet.address)
+      })
+    })
+
+    describe('setRewardsSeller()', () => {
+      it('Should revert if caller is not owner', async () => {
+        await expect(
+          vault.connect(wallet1).setRewardsSeller(constants.AddressZero)
+        ).to.be.revertedWith('Ownable: caller is not the owner')
+      })
+
+      it('Should let owner set rewards seller', async () => {
+        await vault.setRewardsSeller(wallet.address)
+        expect(await vault.rewardsSeller()).to.eq(wallet.address)
+      })
+    })
+  })
+
+  describe('sellRewards()', () => {
+    let rewardsSeller: TestRewardsSeller
+    let token: TestERC20
+
+    before(async () => {
+      await reset(true)
+      rewardsSeller = await deployContract('TestRewardsSeller')
+      token = await deployTestERC20()
+    })
+
+    it('Should revert if token is locked', async () => {
+      await expect(vault.sellRewards(wrapper1.address, '0x00'))
+        .to.be.revertedWith('token locked')
+    })
+
+    it('Should revert if token is underlying', async () => {
+      await expect(vault.sellRewards(underlying.address, '0x00'))
+        .to.be.revertedWith('token locked')
+    })
+
+    it('Should revert if rewards seller is not set', async () => {
+      await expect(vault.sellRewards(token.address, '0x00'))
+        .to.be.revertedWith('null seller')
+    })
+
+    it('Should transfer tokens to seller and invoke sellRewards', async () => {
+      await token.mint(vault.address, getBigNumber(1))
+      await vault.setRewardsSeller(rewardsSeller.address)
+      await expect(vault.sellRewards(token.address, '0x00'))
+        .to.emit(token, 'Transfer')
+        .withArgs(vault.address, rewardsSeller.address, getBigNumber(1))
+        .to.emit(rewardsSeller, 'RewardsSold')
+        .withArgs(wallet.address, token.address, underlying.address, '0x00')
+    })
+  })
+
+  describe('withdrawFromUnusedAdapter()', () => {
+    beforeEach(() => reset(true))
+
+    it('Should revert if adapter is not unused', async () => {
+      await expect(vault.withdrawFromUnusedAdapter(adapter1.address))
+        .to.be.revertedWith('!unused')
+    })
+
+    it('Should revert if adapter not registered', async () => {
+      const {adapter: newAdapter} = await deployTestWrapperAndAdapter(underlying.address)
+      await expect(vault.withdrawFromUnusedAdapter(newAdapter.address))
+        .to.be.revertedWith('!approved')
+    })
+
+    it('Should withdraw from valid unused adapter', async () => {
+      await adapter2.mintTo(vault.address, getBigNumber(1))
+      await expect(vault.withdrawFromUnusedAdapter(adapter2.address))
+        .to.emit(wrapper2, 'Approval')
+        .withArgs(vault.address, adapter2.address, constants.MaxUint256)
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter2.address, vault.address, getBigNumber(1))
+        .to.emit(wrapper2, 'Approval')
+        .withArgs(vault.address, adapter2.address, 0)
+    })
+  })
+
   describe('deposit()', () => {
     setupTests()
 
@@ -413,11 +573,12 @@ describe('NirnVault', () => {
         [getBigNumber(5, 17), getBigNumber(5, 17)]
       )
       await vault.rebalance()
+      const newReserves = toReserve(getBigNumber(4))
       await expect(vault.withdraw(getBigNumber(6)))
         .to.emit(underlying, 'Transfer')
         .withArgs(adapter1.address, vault.address, getBigNumber(45, 17))
         .to.emit(underlying, 'Transfer')
-        .withArgs(adapter2.address, vault.address, getBigNumber(5, 17))
+        .withArgs(adapter2.address, vault.address, getBigNumber(5, 17).add(newReserves))
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, getBigNumber(6))
       expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(4))
@@ -466,18 +627,31 @@ describe('NirnVault', () => {
     })
   })
 
-  describe('claimFees()', () => {
-    setupTests(true)
+  describe('fees', () => {
+    beforeEach(() => reset(true))
 
-    it('Should claim fees and update priceAtLastFee', async () => {
-      await vault.setPerformanceFee(getBigNumber(1, 17))
-      await underlying.mint(vault.address, getBigNumber(100))
-      await expect(vault.claimFees())
-        .to.emit(vault, 'Transfer')
-        .withArgs(constants.AddressZero, feeRecipient.address, ONE_E18)
-        .to.emit(vault, 'FeesClaimed')
-        .withArgs(TEN_E18, ONE_E18)
-      expect(await vault.priceAtLastFee()).to.eq(TEN_E18)
+    describe('claimFees()', () => {
+      it('Should claim fees and update priceAtLastFee', async () => {
+        await vault.setPerformanceFee(getBigNumber(1, 17))
+        await underlying.mint(vault.address, getBigNumber(100))
+        await expect(vault.claimFees())
+          .to.emit(vault, 'Transfer')
+          .withArgs(constants.AddressZero, feeRecipient.address, ONE_E18)
+          .to.emit(vault, 'FeesClaimed')
+          .withArgs(TEN_E18, ONE_E18)
+        expect(await vault.priceAtLastFee()).to.eq(TEN_E18)
+      })
+    })
+
+    describe('getPendingFees', () => {
+      it('Should return 0 when no fees owed', async () => {
+        expect(await vault.getPendingFees()).to.eq(0)
+      })
+
+      it('Should return performance fee times profit since last claim', async () => {
+        await underlying.mint(vault.address, getBigNumber(10))
+        expect(await vault.getPendingFees()).to.eq(getBigNumber(5, 17))
+      })
     })
   })
 
@@ -696,6 +870,311 @@ describe('NirnVault', () => {
           [getBigNumber(5, 17), getBigNumber(5, 17)]
         )).to.eq(apr)
       })
+    })
+  })
+
+  describe('rebalance()', () => {
+    beforeEach(() => reset(true))
+
+    it('Should revert if called by contract other than eoaSafeCaller', async () => {
+      const callForwarder = await deployContract<CallForwarder>('CallForwarder')
+      await expect(
+        callForwarder.execute(
+          vault.address,
+          vault.interface.getSighash('rebalance')
+        )
+      ).to.be.revertedWith('!EOA')
+    })
+
+    it('Should remove adapters with weight 0 and full balance withdrawn', async () => {
+      await vault.rebalance()
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter2.address, adapter1.address],
+        [0, getBigNumber(1)]
+      )
+      await adapter2.mintTo(vault.address, getBigNumber(1))
+      await expect(vault.rebalance())
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter2.address, vault.address, getBigNumber(1))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, adapter1.address, getBigNumber(9, 17))
+        .to.emit(vault, 'AdapterRemoved')
+        .withArgs(adapter2.address)
+    })
+
+    it('Should execute withdrawals before deposits', async () => {
+      await vault.rebalance()
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter1.address, adapter2.address],
+        [getBigNumber(5, 17), getBigNumber(5, 17)],
+      )
+      await expect(vault.rebalance())
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter1.address, vault.address, getBigNumber(45, 17))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, adapter2.address, getBigNumber(45, 17))
+    })
+
+    describe('Should only deposit up to the total amount withdrawn + reserves', () => {
+      it('With reserves = 0', async () => {
+        await vault.rebalance()
+        await vault.setAdaptersAndWeightsInternal(
+          [adapter1.address, adapter2.address],
+          [getBigNumber(5, 17), getBigNumber(5, 17)],
+        )
+        await vault.withdraw(getBigNumber(1))
+        await adapter1.setAvailableLiquidity(getBigNumber(5, 17))
+        await expect(vault.rebalance())
+          .to.emit(underlying, 'Transfer')
+          .withArgs(adapter1.address, vault.address, getBigNumber(5, 17))
+          .to.emit(underlying, 'Transfer')
+          .withArgs(vault.address, adapter2.address, getBigNumber(5, 17))
+      })
+
+      it('With withdrawals = 0', async () => {
+        await vault.rebalance()
+        await vault.setAdaptersAndWeightsInternal(
+          [adapter1.address, adapter2.address],
+          [getBigNumber(5, 17), getBigNumber(5, 17)],
+        )
+        await adapter1.setAvailableLiquidity(0)
+        await expect(vault.rebalance())
+          .to.emit(underlying, 'Transfer')
+          .withArgs(vault.address, adapter2.address, getBigNumber(1))
+      })
+    })
+
+    it('Should emit Rebalanced', async () => {
+      await expect(vault.rebalance()).to.emit(vault, 'Rebalanced')
+    })
+  })
+
+  describe('rebalanceWithNewWeights()', () => {
+    beforeEach(async () => {
+      await reset(true)
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter1.address, adapter2.address],
+        [getBigNumber(5, 17), getBigNumber(5, 17)]
+      )
+    })
+
+    describe('Improvement validation', async () => {
+      it('Should revert if new distribution does not improve APR', async () => {
+        expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(4, 17), getBigNumber(6, 17)]
+          )
+        ).to.be.revertedWith('!increased')
+      })
+  
+      it('Should revert if new distribution gives insufficient improvement', async () => {
+        await adapter2.setAnnualInterest((await adapter1.annualInterest()).mul(102).div(100))
+        await expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(49, 16), getBigNumber(51, 16)]
+          )
+        ).to.be.revertedWith('insufficient improvement')
+      })
+    })
+
+    describe('Weight validation', () => {
+      it('Should revert if wrong # of weights is given', async () => {
+        await expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(1)]
+          )
+        ).to.be.revertedWith('bad lengths')
+      })
+
+      it('Should revert if weight is zero for adapter with >0 weight currently', async () => {
+        await expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(1), 0]
+          )
+        ).to.be.revertedWith('can not set null weight')
+      })
+
+      it('Should not revert if weight is zero for adapter with 0 weight currently', async () => {
+        await vault.setAdaptersAndWeightsInternal(
+          [adapter1.address, adapter2.address, adapter3.address],
+          [getBigNumber(5, 17), getBigNumber(5, 17), 0]
+        )
+        await expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(6, 17), getBigNumber(4, 17), 0]
+          )
+        ).to.not.be.reverted
+      })
+
+      it('Should revert if any weight is less than 5%', async () => {
+        await expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(4, 16), getBigNumber(4, 17)]
+          )
+        ).to.be.revertedWith('weight < 5%')
+      })
+
+      it('Should revert if weights do not equal 1', async () => {
+        await expect(
+          vault.rebalanceWithNewWeights(
+            [getBigNumber(4, 17), getBigNumber(4, 17)]
+          )
+        ).to.be.revertedWith('weights != 100%')
+      })
+    })
+
+    it('Should remove adapters with weight 0 which can be withdrawn', async () => {
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter1.address, adapter2.address, adapter3.address],
+        [getBigNumber(5, 17), getBigNumber(5, 17), 0]
+      )
+      await adapter3.mintTo(vault.address, getBigNumber(10))
+      await expect(
+        vault.rebalanceWithNewWeights([getBigNumber(6, 17), getBigNumber(4, 17), 0])
+      )
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter3.address, vault.address, getBigNumber(10))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, adapter1.address, getBigNumber(108, 17))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, adapter2.address, getBigNumber(72, 17))
+        .to.emit(vault, 'AdapterRemoved')
+        .withArgs(adapter3.address)
+      const {adapters, weights} = await vault.getAdaptersAndWeights()
+      expect(adapters).to.deep.eq([adapter1.address, adapter2.address])
+      expect(weights).to.deep.eq([getBigNumber(6, 17), getBigNumber(4, 17)])
+    })
+  })
+
+  describe('rebalanceWithNewAdapters()', () => {
+    beforeEach(async () => {
+      await reset(true)
+    })
+
+    describe('Improvement validation', async () => {
+      it('Should revert if new distribution does not improve APR', async () => {
+        expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, adapter2.address],
+            [getBigNumber(4, 17), getBigNumber(6, 17)]
+          )
+        ).to.be.revertedWith('!increased')
+      })
+  
+      it('Should revert if new distribution gives insufficient improvement', async () => {
+        await vault.setAdaptersAndWeightsInternal(
+          [adapter1.address, adapter2.address],
+          [getBigNumber(5, 17), getBigNumber(5, 17)]
+        )
+        await adapter2.setAnnualInterest((await adapter1.annualInterest()).mul(102).div(100))
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, adapter2.address],
+            [getBigNumber(5, 17), getBigNumber(5, 17)]
+          )
+        ).to.be.revertedWith('insufficient improvement')
+      })
+    })
+
+    describe('Adapter and weight validation', () => {
+      it('Should revert if any adapter is not registered', async () => {
+        const newAdapter = await deployContract('TestAdapter', underlying.address, wrapper1.address, getBigNumber(1))
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, newAdapter.address],
+            [getBigNumber(4, 17), getBigNumber(4, 17)]
+          )
+        ).to.be.revertedWith('!approved')
+      })
+
+      it('Should revert if adapter has wrong underlying token', async () => {
+        const {adapter: newAdapter} = await deployTestWrapperAndAdapter((await deployTestERC20()).address)
+        await registry.connect(protocolAdapter).addTokenAdapter(newAdapter.address)
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, newAdapter.address],
+            [getBigNumber(4, 17), getBigNumber(4, 17)]
+          )
+        ).to.be.revertedWith('bad adapter')
+      })
+
+      it('Should revert if duplicate adapters given', async () => {
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, adapter1.address],
+            [getBigNumber(5, 17), getBigNumber(5, 17)]
+          )
+        ).to.be.revertedWith('duplicate adapter')
+      })
+
+      it('Should revert if lengths do not match', async () => {
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, adapter2.address],
+            [getBigNumber(1)]
+          )
+        ).to.be.revertedWith('bad lengths')
+      })
+
+      it('Should revert if any weight is less than 5%', async () => {
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, adapter2.address],
+            [getBigNumber(4, 16), getBigNumber(4, 17)]
+          )
+        ).to.be.revertedWith('weight < 5%')
+      })
+
+      it('Should revert if weights do not equal 1', async () => {
+        await expect(
+          vault.rebalanceWithNewAdapters(
+            [adapter1.address, adapter2.address],
+            [getBigNumber(4, 17), getBigNumber(4, 17)]
+          )
+        ).to.be.revertedWith('weights != 100%')
+      })
+    })
+
+    it('Should accept new distribution which results in acceptable improvement', async () => {
+      await adapter2.setAnnualInterest(await adapter1.annualInterest())
+      await vault.rebalanceWithNewAdapters(
+        [adapter1.address, adapter2.address],
+        [getBigNumber(5, 17), getBigNumber(5, 17)]
+      )
+      const { adapters, weights } = await vault.getAdaptersAndWeights()
+      expect(adapters).to.deep.eq([adapter1.address, adapter2.address])
+      expect(weights).to.deep.eq([getBigNumber(5, 17), getBigNumber(5, 17)])
+    })
+
+    it('Should remove un-included adapters if balance can be fully withdrawn', async () => {
+      await vault.rebalance()
+      await adapter2.setAnnualInterest(getBigNumber(1))
+      await expect(
+        vault.rebalanceWithNewAdapters([adapter2.address], [getBigNumber(1)])
+      )
+        .to.emit(vault, 'AdapterRemoved')
+        .withArgs(adapter1.address)
+
+      const { adapters, weights } = await vault.getAdaptersAndWeights()
+      expect(adapters).to.deep.eq([adapter2.address])
+      expect(weights).to.deep.eq([getBigNumber(1)])
+    })
+
+    it('Should keep un-included adapters with weight 0 if balance can not be fully withdrawn', async () => {
+      await vault.rebalance()
+      await adapter1.setAvailableLiquidity(getBigNumber(8))
+      await adapter2.setAnnualInterest(getBigNumber(1))
+      await expect(
+        vault.rebalanceWithNewAdapters([adapter2.address], [getBigNumber(1)])
+      )
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter1.address, vault.address, getBigNumber(8))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, adapter2.address, getBigNumber(9))
+
+      const { adapters, weights } = await vault.getAdaptersAndWeights()
+      expect(adapters).to.deep.eq([adapter2.address, adapter1.address])
+      expect(weights).to.deep.eq([getBigNumber(1), BigNumber.from(0)])
     })
   })
 })
