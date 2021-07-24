@@ -1,4 +1,3 @@
-import { formatEther } from "@ethersproject/units";
 import { expect } from "chai";
 import { BigNumber, constants, ContractTransaction } from "ethers";
 import { waffle } from "hardhat";
