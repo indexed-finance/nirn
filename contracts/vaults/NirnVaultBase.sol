@@ -155,13 +155,13 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
   function setPerformanceFee(uint64 _performanceFee) external override onlyOwner {
     claimFees(balance(), totalSupply);
-    require(_performanceFee <= 2e17, "fee >20%");
+    require(_performanceFee <= 2e17, "fee > 20%");
     performanceFee = _performanceFee;
     emit SetPerformanceFee(_performanceFee);
   }
 
   function setReserveRatio(uint64 _reserveRatio) external override onlyOwner {
-    require(_reserveRatio <= 2e17, "reserve >20%");
+    require(_reserveRatio <= 2e17, "reserve > 20%");
     reserveRatio = _reserveRatio;
     emit SetReserveRatio(_reserveRatio);
   }
