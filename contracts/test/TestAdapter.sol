@@ -15,6 +15,7 @@ contract TestAdapter {
   uint256 public annualInterest;
   bool internal restrictedLiquidity;
   uint256 internal _availableLiquidity;
+  bool internal revertOnAPRQQuery;
 
   constructor(address _underlying, address _token, uint256 _annualInterest) {
     underlying = _underlying;
@@ -31,6 +32,9 @@ contract TestAdapter {
   function setAvailableLiquidity(uint256 amount) external {
     restrictedLiquidity = true;
     _availableLiquidity = amount;
+  }
+  function setRevertOnAPRQQuery(bool _revertOnAPRQQuery) external {
+    revertOnAPRQQuery = _revertOnAPRQQuery;
   }
 
   function toWrappedAmount(uint256 underlyingAmount) public view returns (uint256) {
@@ -50,10 +54,12 @@ contract TestAdapter {
   }
 
   function getAPR() external view returns (uint256) {
+    if (revertOnAPRQQuery) revert();
     return annualInterest.mul(1e18) / TestVault(token).balance();
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view returns (uint256) {
+    if (revertOnAPRQQuery) revert();
     return annualInterest.mul(1e18) / TestVault(token).balance().add(liquidityDelta);
   }
 
