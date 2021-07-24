@@ -28,7 +28,7 @@ contract AaveV1EtherAdapter is AbstractEtherAdapter {
 
 /* ========== Constructor ========== */
 
-  constructor(ILendingPoolAddressesProvider _aave) AbstractErc20Adapter() {
+  constructor(ILendingPoolAddressesProvider _aave) {
     pool = _aave.getLendingPool();
     core = _aave.getLendingPoolCore();
   }

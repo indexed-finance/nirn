@@ -16,12 +16,7 @@ abstract contract AbstractErc20Adapter {
   address public underlying;
   address public token;
 
-/* ========== Constructor & Initializer ========== */
-
-  constructor() {
-    underlying = address(1);
-    token = address(1);
-  }
+/* ========== Initializer ========== */
 
   function initialize(address _underlying, address _token) public virtual {
     require(underlying == address(0) && token == address(0), "initialized");

@@ -20,7 +20,7 @@ contract FuseErc20Adapter is AbstractErc20Adapter {
 
   string internal __protocolName;
 
-/* ========== Constructor & Initializer ========== */
+/* ========== Initializer ========== */
 
   function initialize(
     address _underlying,

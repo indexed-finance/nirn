@@ -42,8 +42,6 @@ contract AaveV2Erc20Adapter is IErc20Adapter {
   constructor(ILendingPoolAddressesProvider _addressesProvider) {
     addressesProvider = _addressesProvider;
     pool = _addressesProvider.getLendingPool();
-    underlying = address(1);
-    token = address(1);
   }
 
   function initialize(address _underlying, address _token) public virtual {
