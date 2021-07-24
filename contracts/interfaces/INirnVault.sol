@@ -45,7 +45,7 @@ interface INirnVault {
 
   function rewardsSeller() external view returns (IRewardsSeller);
 
-  function lockedTokens(address) external view returns (bool);
+  function wrapperAdapters(address) external view returns (address);
 
   function performanceFee() external view returns (uint64);
 
