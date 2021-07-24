@@ -18,7 +18,6 @@ const configureNetwork = (network: string, chainId: number) => ({
 export default {
   gasReporter: {
     enabled: true,
-    proxyResolver
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
