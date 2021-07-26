@@ -32,15 +32,16 @@ contract CrEtherAdapter is AbstractEtherAdapter() {
 
   function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
     return (
-      tokenAmount.mul(CTokenParams.currentExchangeRate(token))
-      / (10 ** (10 + IERC20Metadata(underlying).decimals()))
+      tokenAmount
+      .mul(CTokenParams.currentExchangeRate(token))
+      / uint256(1e18)
     );
   }
 
   function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
     return underlyingAmount
-      .mul(10 ** (10 + IERC20Metadata(underlying).decimals()))
-      .divCeil(CTokenParams.currentExchangeRate(token));
+      .mul(1e18)
+      / CTokenParams.currentExchangeRate(token);
   }
 
 /* ========== Performance Queries ========== */
@@ -58,7 +59,6 @@ contract CrEtherAdapter is AbstractEtherAdapter() {
       uint256 reservesPrior,
       uint256 reserveFactorMantissa
     ) = CTokenParams.getInterestRateParameters(address(cToken));
-
     return IInterestRateModel(model).getSupplyRate(
       cashPrior.add(liquidityDelta),
       borrowsPrior,
@@ -70,7 +70,7 @@ contract CrEtherAdapter is AbstractEtherAdapter() {
 /* ========== Caller Balance Queries ========== */
 
   function balanceUnderlying() external view virtual override returns (uint256) {
-    return ICToken(token).balanceOf(msg.sender).mul(ICToken(token).exchangeRateStored()) / 1e18;
+    return toUnderlyingAmount(ICToken(token).balanceOf(msg.sender));
   }
 
 /* ========== Internal Ether Handlers ========== */
@@ -107,7 +107,7 @@ contract CrEtherAdapter is AbstractEtherAdapter() {
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying.mul(1e18).divCeil(ICToken(token).exchangeRateCurrent());
+    amountBurned = toWrappedAmount(amountUnderlying);
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CEther: Burn failed");
   }
