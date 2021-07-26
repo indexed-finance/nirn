@@ -18,8 +18,8 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 
 /* ========== Constants ========== */
 
-  IComptroller public comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
-  address public constant cComp = 0x70e36f6BF80a52b3B46b3aF8e106CC0ed743E8e4;
+  IComptroller internal comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
+  address internal constant cComp = 0x70e36f6BF80a52b3B46b3aF8e106CC0ed743E8e4;
   address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
 /* ========== Internal Queries ========== */
