@@ -52,13 +52,11 @@ contract FulcrumEtherAdapter is IEtherAdapter {
 /* ========== Conversion Queries ========== */
 
   function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
-    uint256 currentPrice = IToken(token).tokenPrice();
-    return tokenAmount.mul(currentPrice) / uint256(1e18);
+    return tokenAmount.mul(IToken(token).tokenPrice()) / uint256(1e18);
   }
 
   function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
-    uint256 currentPrice = IToken(token).tokenPrice();
-    return underlyingAmount.mul(1e18).divCeil(currentPrice);
+    return underlyingAmount.mul(1e18) / IToken(token).tokenPrice();
   }
 
 /* ========== Performance Queries ========== */
@@ -68,8 +66,9 @@ contract FulcrumEtherAdapter is IEtherAdapter {
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256 apr) {
-    return IToken(token).totalSupplyInterestRate(
-      IToken(token).totalAssetSupply().add(liquidityDelta)
+    IToken iToken = IToken(token);
+    return iToken.totalSupplyInterestRate(
+      iToken.totalAssetSupply().add(liquidityDelta)
     ) / 100;
   }
 
@@ -117,33 +116,36 @@ contract FulcrumEtherAdapter is IEtherAdapter {
     require(amountReceived > 0, "IToken: Burn failed");
   }
 
-  function withdrawAll() external virtual override returns (uint256 amountReceived) {
-    address _token = token;
-    uint256 amountToken = IERC20(_token).balanceOf(msg.sender);
-    _token.safeTransferFrom(msg.sender, address(this), amountToken);
-    amountReceived = IToken(_token).burn(msg.sender, amountToken);
-    require(amountReceived > 0, "IToken: Burn failed");
-  }
-
   function withdrawAsETH(uint256 amountToken) external virtual override returns (uint256 amountReceived) {
     token.safeTransferFrom(msg.sender, address(this), amountToken);
     amountReceived = IToken(token).burnToEther(msg.sender, amountToken);
     require(amountReceived > 0, "IToken: Burn failed");
   }
 
+  function withdrawAll() external virtual override returns (uint256 amountReceived) {
+    uint256 amountToken = IERC20(token).balanceOf(msg.sender);
+    token.safeTransferFrom(msg.sender, address(this), amountToken);
+    amountReceived = IToken(token).burn(msg.sender, amountToken);
+    require(amountReceived > 0, "IToken: Burn failed");
+  }
+
   function withdrawAllAsETH() external virtual override returns (uint256 amountReceived) {
-    address _token = token;
-    uint256 amountToken = IERC20(_token).balanceOf(msg.sender);
-    _token.safeTransferFrom(msg.sender, address(this), amountToken);
-    amountReceived = IToken(_token).burnToEther(msg.sender, amountToken);
+    uint256 amountToken = IERC20(token).balanceOf(msg.sender);
+    token.safeTransferFrom(msg.sender, address(this), amountToken);
+    amountReceived = IToken(token).burnToEther(msg.sender, amountToken);
     require(amountReceived > 0, "IToken: Burn failed");
   }
 
   function withdrawUnderlying(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
-    uint256 currentPrice = IToken(token).tokenPrice();
-    amountBurned = amountUnderlying.mul(1e18) / currentPrice;
+    amountBurned = amountUnderlying.mul(1e18).divCeil(IToken(token).tokenPrice());
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
+  }
+
+  function withdrawUnderlyingAsETH(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
+    amountBurned = amountUnderlying.mul(1e18).divCeil(IToken(token).tokenPrice());
+    token.safeTransferFrom(msg.sender, address(this), amountBurned);
+    require(IToken(token).burnToEther(msg.sender, amountBurned) > 0, "IToken: Burn failed");
   }
 
   function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
@@ -152,11 +154,5 @@ contract FulcrumEtherAdapter is IEtherAdapter {
     uint256 amountBurned = amountReceived.mul(1e18) / IToken(token).tokenPrice();
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
     require(IToken(token).burn(msg.sender, amountBurned) > 0, "IToken: Burn failed");
-  }
-
-  function withdrawUnderlyingAsETH(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
-    amountBurned = toWrappedAmount(amountUnderlying);
-    token.safeTransferFrom(msg.sender, address(this), amountBurned);
-    require(IToken(token).burnToEther(msg.sender, amountBurned) > 0, "IToken: Burn failed");
   }
 }
