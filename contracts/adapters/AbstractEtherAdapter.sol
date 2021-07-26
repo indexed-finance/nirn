@@ -27,7 +27,12 @@ abstract contract AbstractEtherAdapter is AbstractErc20Adapter {
 
 /* ========== Token Actions ========== */
 
-  function deposit(uint256 amountUnderlying) external virtual override returns (uint256 amountMinted) {
+  function deposit(uint256 amountUnderlying)
+    external
+    virtual
+    override
+    returns (uint256 amountMinted)
+  {
     underlying.safeTransferFrom(msg.sender, address(this), amountUnderlying);
     _afterReceiveWETH(amountUnderlying);
     amountMinted = _mint(amountUnderlying);
@@ -68,6 +73,15 @@ abstract contract AbstractEtherAdapter is AbstractErc20Adapter {
     amountBurned = _burnUnderlying(amountUnderlying);
     _beforeSendETH(amountUnderlying);
     address(msg.sender).safeTransferETH(amountUnderlying);
+  }
+
+  function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
+    require(amountUnderlying > 0, "withdraw 0");
+    uint256 amountAvailable = availableLiquidity();
+    amountReceived = amountAvailable < amountUnderlying ? amountAvailable : amountUnderlying;
+    _burnUnderlying(amountReceived);
+    _beforeSendWETH(amountReceived);
+    underlying.safeTransfer(msg.sender, amountReceived);
   }
 
 /* ========== Internal Ether Handlers ========== */
