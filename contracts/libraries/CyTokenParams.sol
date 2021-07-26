@@ -3,10 +3,12 @@ pragma solidity =0.7.6;
 
 import "../interfaces/CompoundInterfaces.sol";
 import "./LowGasSafeMath.sol";
+import "./MinimalSignedMath.sol";
 
 
 library CyTokenParams {
   using LowGasSafeMath for uint256;
+  using MinimalSignedMath for uint256;
 
   uint256 internal constant EXP_SCALE = 1e18;
 
@@ -33,6 +35,22 @@ library CyTokenParams {
       borrowsPrior = borrowsPrior.add(interestAccumulated);
       reservesPrior = mulScalarTruncate(reserveFactorMantissa, interestAccumulated).add(reservesPrior);
     }
+  }
+
+  function getSupplyRate(address token, int256 liquidityDelta) internal view returns (uint256) {
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = getInterestRateParameters(token);
+    return IInterestRateModel(model).getSupplyRate(
+      cashPrior.add(liquidityDelta),
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa
+    ).mul(2102400);
   }
 
   function currentExchangeRate(address token) internal view returns (uint256 exchangeRate) {
