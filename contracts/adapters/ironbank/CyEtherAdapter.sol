@@ -47,69 +47,57 @@ contract CyEtherAdapter is AbstractEtherAdapter() {
 /* ========== Performance Queries ========== */
 
   function getAPR() public view virtual override returns (uint256) {
-    return ICToken(token).supplyRatePerBlock().mul(2102400);
+    return CyTokenParams.getSupplyRate(token, 0);
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
-    ICToken cToken = ICToken(token);
-    (
-      address model,
-      uint256 cashPrior,
-      uint256 borrowsPrior,
-      uint256 reservesPrior,
-      uint256 reserveFactorMantissa
-    ) = CyTokenParams.getInterestRateParameters(address(cToken));
-
-    return IInterestRateModel(model).getSupplyRate(
-      cashPrior.add(liquidityDelta),
-      borrowsPrior,
-      reservesPrior,
-      reserveFactorMantissa
-    ).mul(2102400);
+    return CyTokenParams.getSupplyRate(token, liquidityDelta);
   }
 
 /* ========== Caller Balance Queries ========== */
 
   function balanceUnderlying() external view virtual override returns (uint256) {
-    return ICToken(token).balanceOf(msg.sender).mul(ICToken(token).exchangeRateStored()) / 1e18;
+    return toUnderlyingAmount(ICToken(token).balanceOf(msg.sender));
   }
 
 /* ========== Internal Ether Handlers ========== */
   
   // Convert to WETH if contract takes WETH
-  function _afterReceiveETH(uint256 amount) internal virtual override {}
-
-  // Convert to WETH if contract takes ETH
-  function _afterReceiveWETH(uint256 amount) internal virtual override {
-    IWETH(underlying).withdraw(amount);
-  }
-
-  // Convert to ETH if contract returns WETH
-  function _beforeSendETH(uint256 amount) internal virtual override {}
-
-  // Convert to WETH if contract returns ETH
-  function _beforeSendWETH(uint256 amount) internal virtual override {
+  function _afterReceiveETH(uint256 amount) internal virtual override {
     IWETH(underlying).deposit{value: amount}();
   }
 
+  // Convert to ETH if contract takes ETH
+  function _afterReceiveWETH(uint256 amount) internal virtual override {}
+
+  // Convert to ETH if contract returns WETH
+  function _beforeSendETH(uint256 amount) internal virtual override {
+    IWETH(underlying).withdraw(amount);
+  }
+
+  // Convert to WETH if contract returns ETH
+  function _beforeSendWETH(uint256 amount) internal virtual override {}
+
 /* ========== Internal Actions ========== */
 
-  function _approve() internal virtual override {}
+  function _approve() internal virtual override {
+    underlying.safeApproveMax(token);
+  }
 
   function _mint(uint256 amountUnderlying) internal virtual override returns (uint256 amountMinted) {
     address _token = token;
-    ICToken(_token).mint{value: amountUnderlying}();
+    require(ICToken(_token).mint(amountUnderlying) == 0, "CErc20: Mint failed");
     amountMinted = IERC20(_token).balanceOf(address(this));
   }
 
   function _burn(uint256 amountToken) internal virtual override returns (uint256 amountReceived) {
-    require(ICToken(token).redeem(amountToken) == 0, "CEther: Burn failed");
-    amountReceived = address(this).balance;
+    require(ICToken(token).redeem(amountToken) == 0, "CErc20: Burn failed");
+    amountReceived = IERC20(underlying).balanceOf(address(this));
   }
 
   function _burnUnderlying(uint256 amountUnderlying) internal virtual override returns (uint256 amountBurned) {
-    amountBurned = amountUnderlying.mul(1e18).divCeil(ICToken(token).exchangeRateCurrent());
+    amountBurned = toWrappedAmount(amountUnderlying);
     token.safeTransferFrom(msg.sender, address(this), amountBurned);
-    require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CEther: Burn failed");
+    require(ICToken(token).redeemUnderlying(amountUnderlying) == 0, "CrErc20: Burn failed");
   }
 }
