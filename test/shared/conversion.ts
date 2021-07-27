@@ -1,15 +1,7 @@
 import { BigNumber } from "ethers";
 import { AaveV2Erc20Adapter, CErc20Adapter, ICToken, IERC20, IErc20Adapter, IToken } from "../../typechain";
 import { getBigNumber, getContract } from "./utils";
-
-export interface ConvertHelper {
-  liquidityHolder(token: IERC20): Promise<string>;
-  toWrapped(token: IERC20, amount: BigNumber, withdrawUnderlying?: boolean): Promise<BigNumber>;
-  toUnderlying(token: IERC20, amount: BigNumber): Promise<BigNumber>;
-  getRewardsTokenAndAPR?: (adapter: IErc20Adapter) => Promise<[string, BigNumber]>
-  protocolName: string;
-  symbolPrefix: string;
-}
+import { ConvertHelper } from '../../@types/augmentations'
 
 export const CompoundConverter: ConvertHelper = {
   liquidityHolder: async (token) => token.address,
@@ -45,6 +37,7 @@ export const CreamConverter = {
 };
 
 export const IronBankConverter = {
+  useWrappedEther: true,
   liquidityHolder: CompoundConverter.liquidityHolder,
   toWrapped: CompoundConverter.toWrapped,
   toUnderlying: CompoundConverter.toUnderlying,
@@ -61,6 +54,7 @@ export const AaveV1Converter: ConvertHelper = {
 }
 
 export const AaveV2Converter: ConvertHelper = {
+  useWrappedEther: true,
   liquidityHolder: async (token) => token.address,
   toWrapped: async (_, amount) => { return amount; },
   toUnderlying: async (_, amount) => { return amount; },
@@ -78,6 +72,7 @@ export const AaveV2Converter: ConvertHelper = {
 }
 
 export const FulcrumConverter: ConvertHelper = {
+  useWrappedEther: true,
   liquidityHolder: async (token) => token.address,
   toWrapped: async (token, amount, withdrawUnderlying?: boolean) => {
     const c: IToken = await getContract(token.address, 'IToken');

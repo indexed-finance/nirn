@@ -3,19 +3,21 @@ import { BigNumber } from "ethers";
 import { IERC20 } from "../typechain/IERC20";
 import { IErc20Adapter } from "../typechain/IErc20Adapter";
 
-interface ConvertHelper {
+export interface ConvertHelper {
   liquidityHolder(token: IERC20): Promise<string>;
   toWrapped(token: IERC20, amount: BigNumber, withdrawUnderlying?: boolean): Promise<BigNumber>;
   toUnderlying(token: IERC20, amount: BigNumber): Promise<BigNumber>;
   getRewardsTokenAndAPR?: (adapter: IErc20Adapter) => Promise<[string, BigNumber]>
   protocolName: string;
   symbolPrefix: string;
+  useWrappedEther?: boolean;
 }
 
 declare module "mocha" {
   interface Context {
     // Util functions
     getImplementation: () => Promise<IErc20Adapter>
+    getExpectedLiquidity: () => Promise<BigNumber>
     initialize: (adapter: IErc20Adapter, underlying: IERC20, token: IERC20) => Promise<any>
     resetTests: (deposit?: boolean) => Promise<void>
     toUnderlying: (amount: BigNumber) => Promise<BigNumber>
