@@ -26,10 +26,11 @@ export async function getTokenSymbol(token: IERC20) {
   return metadata.symbol();
 }
 
-export async function createBalanceCheckpoint(token: IERC20, account: string) {
-  const balanceBefore = await token.balanceOf(account)
+export async function createBalanceCheckpoint(token: IERC20 | null, account: string) {
+  const bal = () => token ? token.balanceOf(account) : ethers.provider.getBalance(account)
+  const balanceBefore = await bal()
   return async () => {
-    const balanceAfter = await token.balanceOf(account)
+    const balanceAfter = await bal()
     return balanceAfter.sub(balanceBefore)
   }
 }
@@ -41,6 +42,13 @@ export const sendEtherTo = (address: string, amount: BigNumber = getBigNumber(1)
   const tx = await factory.getDeployTransaction(address);
   await signer.sendTransaction({ data: tx.data, value: amount });
 });
+
+export const sendEtherToFrom = async (from: string, to: string, amount: BigNumber = getBigNumber(1)) => {
+  await withSigner(from, async (signer) => {
+    await signer.sendTransaction({ to: `0x${'ff'.repeat(20)}`, value: amount.sub(21000), gasPrice: 1, gasLimit: 21000 })
+  })
+  await sendEtherTo(to, amount)
+};
 
 export async function getIERC20(token: string): Promise<IERC20> {
   return getContract(token, 'IERC20')

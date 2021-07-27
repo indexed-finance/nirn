@@ -1,6 +1,6 @@
 import { getContractAddress } from '@ethersproject/address';
 import { JsonRpcSigner } from '@ethersproject/providers';
-import { BigNumber, Contract } from 'ethers';
+import { BigNumber, Contract, ContractTransaction } from 'ethers';
 import { ethers, network } from 'hardhat';
 import { TestFactory, IProtocolAdapter } from '../../typechain';
 
@@ -25,6 +25,12 @@ export async function getContractBase<C extends Contract>(address: string, name:
 export async function getNextContractAddress(account: string): Promise<string> {
   const nonce = await ethers.provider.getTransactionCount(account);
   return getContractAddress({ from: account, nonce });
+}
+
+export async function getTransactionCost(tx: ContractTransaction | Promise<ContractTransaction>) {
+  const { wait, gasPrice } = await Promise.resolve(tx);
+  const { gasUsed } = await wait()
+  return gasUsed.mul(gasPrice);
 }
 
 //#region Chain utils
