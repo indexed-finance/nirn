@@ -20,13 +20,16 @@ contract AaveV2EtherAdapter is IEtherAdapter {
   address public constant aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
   IAaveDistributionManager internal constant distributor = IAaveDistributionManager(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
   ILendingPool public immutable pool;
-
-/* ========== Storage ========== */
-
   address public immutable userModuleImplementation;
   address public immutable override underlying;
   address public immutable override token;
+
+/* ========== Storage ========== */
   mapping(address => address) public userModules;
+
+/* ========== Fallbacks ========== */
+
+  receive() external payable { return; }
 
 /* ========== Constructor & Initializer ========== */
 
@@ -143,7 +146,7 @@ contract AaveV2EtherAdapter is IEtherAdapter {
     assets = new address[](size);
     aprs = new uint256[](size);
     assets[0] = underlying;
-    aprs[0] = getAPR();
+    aprs[0] = getBaseAPR();
     if (rewardsAPR > 0) {
       assets[1] = aave;
       aprs[1] = rewardsAPR;
@@ -219,14 +222,14 @@ contract AaveV2EtherAdapter is IEtherAdapter {
     return withdraw(amountUnderlying);
   }
 
+  function withdrawUnderlyingAsETH(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
+    return withdrawAsETH(amountUnderlying);
+  }
+
   function withdrawUnderlyingUpTo(uint256 amountUnderlying) external virtual override returns (uint256 amountReceived) {
     require(amountUnderlying > 0, "withdraw 0");
     uint256 amountAvailable = availableLiquidity();
     amountReceived = amountAvailable < amountUnderlying ? amountAvailable : amountUnderlying;
     withdraw(amountReceived);
-  }
-
-  function withdrawUnderlyingAsETH(uint256 amountUnderlying) external virtual override returns (uint256 amountBurned) {
-    return withdrawAsETH(amountUnderlying);
   }
 }

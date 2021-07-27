@@ -228,8 +228,6 @@ contract AaveV2UserModule {
   bool public assetHasRewards;
   uint32 public cooldownUnlockAt;
 
-  receive() external payable { return; }
-
   constructor(
     ILendingPoolAddressesProvider addressesProvider,
     address _underlying,
