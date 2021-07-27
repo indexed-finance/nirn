@@ -20,6 +20,7 @@ contract CErc20Adapter is AbstractErc20Adapter() {
 
   IComptroller internal constant comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
   address internal constant cComp = 0x70e36f6BF80a52b3B46b3aF8e106CC0ed743E8e4;
+  address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
 /* ========== Internal Queries ========== */
 
@@ -65,11 +66,18 @@ contract CErc20Adapter is AbstractErc20Adapter() {
 
   function getRewardsAPR() public view returns (uint256) {
     ICToken cToken = ICToken(token);
-    uint256 totalLiquidity = cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
+    (
+      ,uint256 cash,
+      uint256 borrows,
+      uint256 reserves,
+    ) = CTokenParams.getInterestRateParameters(address(cToken));
+
+    uint256 totalLiquidity = cash.add(borrows).sub(reserves);
+    cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
     return getRewardsAPR(ICToken(token), totalLiquidity);
   }
 
-  function getAPR() external view virtual override returns (uint256) {
+  function getAPR() public view virtual override returns (uint256) {
     ICToken cToken = ICToken(token);
     (
       address model,
@@ -105,6 +113,42 @@ contract CErc20Adapter is AbstractErc20Adapter() {
       reservesPrior,
       reserveFactorMantissa
     ).mul(2102400).add(getRewardsAPR(cToken, liquidityTotal));
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    override
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    ICToken cToken = ICToken(token);
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = CTokenParams.getInterestRateParameters(address(cToken));
+    uint256 liquidityTotal = cashPrior.add(borrowsPrior).sub(reservesPrior);
+    uint256 baseAPR = IInterestRateModel(model).getSupplyRate(
+      cashPrior,
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa
+    ).mul(2102400);
+    uint256 rewardsAPR = getRewardsAPR(cToken, liquidityTotal);
+    uint256 size = rewardsAPR > 0 ? 2 : 1;
+    assets = new address[](size);
+    aprs = new uint256[](size);
+    assets[0] = underlying;
+    aprs[0] = baseAPR;
+    if (rewardsAPR > 0) {
+      assets[1] = comp;
+      aprs[1] = rewardsAPR;
+    }
   }
 
 /* ========== Caller Balance Queries ========== */

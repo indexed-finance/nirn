@@ -80,7 +80,7 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256 apr) {
+  function getAPR() public view virtual override returns (uint256 apr) {
     uint256 _marketId = marketId;
     uint256 rate = dydx.getMarketInterestRate(_marketId).value;
     uint256 aprBorrow = rate * 31622400;
@@ -100,6 +100,21 @@ contract DyDxErc20Adapter is ERC20, DyDxStructs, IErc20Adapter {
     uint256 supply = uint256(dydx.getMarketTotalPar(_marketId).supply).add(liquidityDelta);
     uint256 usage = (borrow.mul(DECIMAL)) / supply;
     apr = ((aprBorrow.mul(usage)) / DECIMAL).mul(dydx.getEarningsRate().value) / DECIMAL;
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    override
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    assets = new address[](1);
+    aprs = new uint256[](1);
+    assets[0] = underlying;
+    aprs[0] = getAPR();
   }
 
 /* ========== Token Actions ========== */

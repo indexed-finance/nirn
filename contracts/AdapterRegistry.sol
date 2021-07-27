@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "./interfaces/ITokenAdapter.sol";
 import "./libraries/ArrayHelper.sol";
+import "./libraries/DynamicArrays.sol";
 import "./interfaces/IProtocolAdapter.sol";
 
 
@@ -13,6 +14,8 @@ contract AdapterRegistry is Ownable() {
   using ArrayHelper for address[];
   using ArrayHelper for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.AddressSet;
+  using DynamicArrays for address[];
+  using DynamicArrays for uint256[];
 
 /* ========== Events ========== */
 
@@ -128,11 +131,16 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Protocol Queries ========== */
 
-  function getProtocolAdapters() external view returns (address[] memory adapters) {
+  function getProtocolAdaptersAndIds() external view returns (address[] memory adapters, uint256[] memory ids) {
     uint256 len = protocolsCount;
-    adapters = new address[](len);
-    for (uint256 i; i < len; i++) {
-      adapters[i] = protocolAdapters[i];
+    adapters = DynamicArrays.dynamicAddressArray(len);
+    ids = DynamicArrays.dynamicUint256Array(len);
+    for (uint256 id = 1; id <= len; id++) {
+      address adapter = protocolAdapters[id];
+      if (adapter != address(0)) {
+        adapters.dynamicPush(adapter);
+        ids.dynamicPush(id);
+      }
     }
   }
 

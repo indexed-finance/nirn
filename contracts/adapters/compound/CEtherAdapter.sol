@@ -8,7 +8,7 @@ import "../../interfaces/IWETH.sol";
 import "../../libraries/LowGasSafeMath.sol";
 import "../../libraries/TransferHelper.sol";
 import "../../libraries/MinimalSignedMath.sol";
-import { CTokenParams } from "../../libraries/CTokenParams.sol";
+import { C1TokenParams } from "../../libraries/C1TokenParams.sol";
 
 
 contract CEtherAdapter is AbstractEtherAdapter() {
@@ -18,8 +18,9 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 
 /* ========== Constants ========== */
 
-  IComptroller public comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
-  address public constant cComp = 0x70e36f6BF80a52b3B46b3aF8e106CC0ed743E8e4;
+  IComptroller internal comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
+  address internal constant cComp = 0x70e36f6BF80a52b3B46b3aF8e106CC0ed743E8e4;
+  address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
 /* ========== Internal Queries ========== */
 
@@ -37,15 +38,16 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 
   function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
     return (
-      tokenAmount.mul(CTokenParams.currentExchangeRate(token))
-      / (10 ** (10 + IERC20Metadata(underlying).decimals()))
+      tokenAmount
+      .mul(C1TokenParams.currentExchangeRate(token))
+      / uint256(1e18)
     );
   }
 
   function toWrappedAmount(uint256 underlyingAmount) public view override returns (uint256) {
     return underlyingAmount
-      .mul(10 ** (10 + IERC20Metadata(underlying).decimals()))
-      .divCeil(CTokenParams.currentExchangeRate(token));
+      .mul(1e18)
+      / C1TokenParams.currentExchangeRate(token);
   }
 
 /* ========== Performance Queries ========== */
@@ -64,13 +66,37 @@ contract CEtherAdapter is AbstractEtherAdapter() {
 
   function getRewardsAPR() public view returns (uint256) {
     ICToken cToken = ICToken(token);
-    uint256 totalLiquidity = cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
+    (
+      ,uint256 cash,
+      uint256 borrows,
+      uint256 reserves,
+    ) = C1TokenParams.getInterestRateParametersV1(address(cToken));
+
+    uint256 totalLiquidity = cash.add(borrows).sub(reserves);
+    cToken.getCash().add(cToken.totalBorrows()).sub(cToken.totalReserves());
     return getRewardsAPR(ICToken(token), totalLiquidity);
   }
 
-  function getAPR() external view virtual override returns (uint256) {
+  function getAPR() public view virtual override returns (uint256) {
     ICToken cToken = ICToken(token);
-    return cToken.supplyRatePerBlock().mul(2102400).add(getRewardsAPR());
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = C1TokenParams.getInterestRateParametersV1(address(cToken));
+    uint256 liquidityTotal = cashPrior.add(borrowsPrior).sub(reservesPrior);
+    uint256 baseAPR = C1TokenParams.computeSupplyRateV1(
+      model,
+      cashPrior,
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa,
+      0
+    );
+    uint256 rewardsAPR = getRewardsAPR(cToken, liquidityTotal);
+    return baseAPR.add(rewardsAPR);
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
@@ -81,21 +107,62 @@ contract CEtherAdapter is AbstractEtherAdapter() {
       uint256 borrowsPrior,
       uint256 reservesPrior,
       uint256 reserveFactorMantissa
-    ) = CTokenParams.getInterestRateParameters(address(cToken));
-    uint256 liquidityTotal = cashPrior.add(liquidityDelta).add(borrowsPrior).sub(reservesPrior);
-
-    return IInterestRateModel(model).getSupplyRate(
-      cashPrior.add(liquidityDelta),
+    ) = C1TokenParams.getInterestRateParametersV1(address(cToken));
+    uint256 liquidityTotal = cashPrior.add(borrowsPrior).sub(reservesPrior);
+    uint256 baseAPR = C1TokenParams.computeSupplyRateV1(
+      model,
+      cashPrior,
       borrowsPrior,
       reservesPrior,
-      reserveFactorMantissa
-    ).mul(2102400).add(getRewardsAPR(cToken, liquidityTotal));
+      reserveFactorMantissa,
+      liquidityDelta
+    );
+    uint256 rewardsAPR = getRewardsAPR(cToken, liquidityTotal.add(liquidityDelta));
+    return baseAPR.add(rewardsAPR);
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    override
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    ICToken cToken = ICToken(token);
+    (
+      address model,
+      uint256 cashPrior,
+      uint256 borrowsPrior,
+      uint256 reservesPrior,
+      uint256 reserveFactorMantissa
+    ) = C1TokenParams.getInterestRateParametersV1(address(cToken));
+    uint256 liquidityTotal = cashPrior.add(borrowsPrior).sub(reservesPrior);
+    uint256 baseAPR = C1TokenParams.computeSupplyRateV1(
+      model,
+      cashPrior,
+      borrowsPrior,
+      reservesPrior,
+      reserveFactorMantissa,
+      0
+    );
+    uint256 rewardsAPR = getRewardsAPR(cToken, liquidityTotal);
+    uint256 size = rewardsAPR > 0 ? 2 : 1;
+    assets = new address[](size);
+    aprs = new uint256[](size);
+    assets[0] = underlying;
+    aprs[0] = baseAPR;
+    if (rewardsAPR > 0) {
+      assets[1] = comp;
+      aprs[1] = rewardsAPR;
+    }
   }
 
 /* ========== Caller Balance Queries ========== */
 
   function balanceUnderlying() external view virtual override returns (uint256) {
-    return ICToken(token).balanceOf(msg.sender).mul(ICToken(token).exchangeRateStored()) / 1e18;
+    return toUnderlyingAmount(ICToken(token).balanceOf(msg.sender));
   }
 
 /* ========== Internal Ether Handlers ========== */

@@ -16,12 +16,7 @@ abstract contract AbstractErc20Adapter {
   address public underlying;
   address public token;
 
-/* ========== Constructor & Initializer ========== */
-
-  constructor() {
-    underlying = address(1);
-    token = address(1);
-  }
+/* ========== Initializer ========== */
 
   function initialize(address _underlying, address _token) public virtual {
     require(underlying == address(0) && token == address(0), "initialized");
@@ -56,9 +51,24 @@ abstract contract AbstractErc20Adapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual returns (uint256);
+  function getAPR() public view virtual returns (uint256);
 
   function getHypotheticalAPR(int256 _deposit) external view virtual returns (uint256);
+
+  function getRevenueBreakdown()
+    external
+    view
+    virtual
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    assets = new address[](1);
+    aprs = new uint256[](1);
+    assets[0] = underlying;
+    aprs[0] = getAPR();
+  }
 
 /* ========== Caller Balance Queries ========== */
 

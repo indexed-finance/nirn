@@ -11,6 +11,31 @@ export const UNISWAP_FACTORY_ADDRESS = '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa
 
 export const WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 
+//#region query helpers
+export async function getBalance(erc20: string, account: string): Promise<BigNumber> {
+  return (await getIERC20(erc20)).balanceOf(account);
+}
+
+export async function getTokenDecimals(token: IERC20) {
+  const metadata: IERC20Metadata = await getContract(token.address, 'IERC20Metadata');
+  return metadata.decimals();
+}
+
+export async function getTokenSymbol(token: IERC20) {
+  const metadata: IERC20Metadata = await getContract(token.address, 'IERC20Metadata');
+  return metadata.symbol();
+}
+
+export async function createBalanceCheckpoint(token: IERC20 | null, account: string) {
+  const bal = () => token ? token.balanceOf(account) : ethers.provider.getBalance(account)
+  const balanceBefore = await bal()
+  return async () => {
+    const balanceAfter = await bal()
+    return balanceAfter.sub(balanceBefore)
+  }
+}
+//#region query helpers
+
 //#region transfers
 export const sendEtherTo = (address: string, amount: BigNumber = getBigNumber(1)) => withSigner(WETH, async (signer) => {
   const factory = await ethers.getContractFactory('SendEth');
@@ -18,12 +43,15 @@ export const sendEtherTo = (address: string, amount: BigNumber = getBigNumber(1)
   await signer.sendTransaction({ data: tx.data, value: amount });
 });
 
+export const sendEtherToFrom = async (from: string, to: string, amount: BigNumber = getBigNumber(1)) => {
+  await withSigner(from, async (signer) => {
+    await signer.sendTransaction({ to: `0x${'ff'.repeat(20)}`, value: amount.sub(21000), gasPrice: 1, gasLimit: 21000 })
+  })
+  await sendEtherTo(to, amount)
+};
+
 export async function getIERC20(token: string): Promise<IERC20> {
   return getContract(token, 'IERC20')
-}
-
-export async function getBalance(erc20: string, account: string): Promise<BigNumber> {
-  return (await getIERC20(erc20)).balanceOf(account);
 }
 
 const holders: Record<string, string> = {
@@ -163,15 +191,6 @@ export function computeSushiswapPairAddress(
 
 
 //#region token amounts
-export async function getTokenDecimals(token: IERC20) {
-  const metadata: IERC20Metadata = await getContract(token.address, 'IERC20Metadata');
-  return metadata.decimals();
-}
-
-export async function getTokenSymbol(token: IERC20) {
-  const metadata: IERC20Metadata = await getContract(token.address, 'IERC20Metadata');
-  return metadata.symbol();
-}
 
 export async function formatTokenAmount(token: IERC20, amount: BigNumber) {
   return formatUnits(amount, await getTokenDecimals(token));

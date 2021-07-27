@@ -24,7 +24,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 
 /* ========== Constructor ========== */
 
-  constructor(ILendingPoolAddressesProvider _aave) AbstractErc20Adapter() {
+  constructor(ILendingPoolAddressesProvider _aave) {
     pool = _aave.getLendingPool();
     core = _aave.getLendingPoolCore();
   }
@@ -53,7 +53,7 @@ contract AaveV1Erc20Adapter is AbstractErc20Adapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256 apr) {
+  function getAPR() public view virtual override returns (uint256 apr) {
     apr = core.getReserveCurrentLiquidityRate(underlying) / 1e9;
   }
 

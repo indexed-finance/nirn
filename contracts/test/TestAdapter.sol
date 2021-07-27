@@ -12,13 +12,13 @@ contract TestAdapter {
 
   address public immutable underlying;
   address public immutable token;
-  uint256 internal annualInterest;
+  uint256 public annualInterest;
   bool internal restrictedLiquidity;
   uint256 internal _availableLiquidity;
+  bool internal revertOnAPRQQuery;
 
-  constructor(address _underlying, uint256 _annualInterest) {
+  constructor(address _underlying, address _token, uint256 _annualInterest) {
     underlying = _underlying;
-    address _token = address(new TestVault(_underlying));
     token = _token;
     annualInterest = _annualInterest;
     _underlying.safeApproveMax(_token);
@@ -32,6 +32,9 @@ contract TestAdapter {
   function setAvailableLiquidity(uint256 amount) external {
     restrictedLiquidity = true;
     _availableLiquidity = amount;
+  }
+  function setRevertOnAPRQQuery(bool _revertOnAPRQQuery) external {
+    revertOnAPRQQuery = _revertOnAPRQQuery;
   }
 
   function toWrappedAmount(uint256 underlyingAmount) public view returns (uint256) {
@@ -51,10 +54,12 @@ contract TestAdapter {
   }
 
   function getAPR() external view returns (uint256) {
+    if (revertOnAPRQQuery) revert();
     return annualInterest.mul(1e18) / TestVault(token).balance();
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view returns (uint256) {
+    if (revertOnAPRQQuery) revert();
     return annualInterest.mul(1e18) / TestVault(token).balance().add(liquidityDelta);
   }
 
@@ -66,7 +71,13 @@ contract TestAdapter {
     return toUnderlyingAmount(balanceWrapped());
   }
 
-    function deposit(uint256 amountUnderlying) external virtual returns (uint256 amountMinted) {
+  function mintTo(address to, uint256 amount) external {
+    TestERC20(underlying).mint(address(this), amount);
+    uint256 amountMinted = TestVault(token).deposit(amount);
+    token.safeTransfer(to, amountMinted);
+  }
+
+  function deposit(uint256 amountUnderlying) external virtual returns (uint256 amountMinted) {
     require(amountUnderlying > 0, "deposit 0");
     underlying.safeTransferFrom(msg.sender, address(this), amountUnderlying);
     amountMinted = TestVault(token).deposit(amountUnderlying);

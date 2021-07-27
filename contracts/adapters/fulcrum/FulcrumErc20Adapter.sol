@@ -29,12 +29,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
 
   address public override token;
 
-/* ========== Constructor & Initializer ========== */
-
-  constructor() {
-    underlying = address(1);
-    token = address(1);
-  }
+/* ========== Initializer ========== */
 
   function initialize(address _underlying, address _token) public virtual {
     require(underlying == address(0) && token == address(0), "initialized");
@@ -78,7 +73,7 @@ contract FulcrumErc20Adapter is IErc20Adapter {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256 apr) {
+  function getAPR() public view virtual override returns (uint256 apr) {
     return IToken(token).supplyInterestRate() / 100;
   }
 
@@ -87,6 +82,21 @@ contract FulcrumErc20Adapter is IErc20Adapter {
     return iToken.totalSupplyInterestRate(
       iToken.totalAssetSupply().add(liquidityDelta)
     ) / 100;
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    override
+    returns (
+      address[] memory assets,
+      uint256[] memory aprs
+    )
+  {
+    assets = new address[](1);
+    aprs = new uint256[](1);
+    assets[0] = underlying;
+    aprs[0] = getAPR();
   }
 
 /* ========== Caller Balance Queries ========== */

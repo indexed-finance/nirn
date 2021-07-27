@@ -15,9 +15,26 @@ interface INirnVault {
   /** @dev Emitted when weights or adapters are updated. */
   event AllocationsUpdated(IErc20Adapter[] adapters, uint256[] weights);
 
+  /** @dev Emitted when performance fees are claimed. */
   event FeesClaimed(uint256 underlyingAmount, uint256 sharesMinted);
 
+  /** @dev Emitted when a rebalance happens without allocation changes. */
   event Rebalanced();
+
+  /** @dev Emitted when max underlying is updated. */
+  event SetMaximumUnderlying(uint256 maxBalance);
+
+  /** @dev Emitted when fee recipient address is set. */
+  event SetFeeRecipient(address feeRecipient);
+
+  /** @dev Emitted when performance fee is set. */
+  event SetPerformanceFee(uint256 performanceFee);
+
+  /** @dev Emitted when reserve ratio is set. */
+  event SetReserveRatio(uint256 reserveRatio);
+
+  /** @dev Emitted when rewards seller contract is set. */
+  event SetRewardsSeller(address rewardsSeller);
 
 /* ========== Config Queries ========== */
 
@@ -31,13 +48,15 @@ interface INirnVault {
 
   function name() external view returns (string memory);
 
-  function symbol() external view returns (string memory);
+  function symbol() external view returns (string memory);  
 
   function feeRecipient() external view returns (address);
 
   function rewardsSeller() external view returns (IRewardsSeller);
 
   function lockedTokens(address) external view returns (bool);
+
+  function maximumUnderlying() external view returns (uint256);
 
   function performanceFee() external view returns (uint64);
 
@@ -47,11 +66,15 @@ interface INirnVault {
 
 /* ========== Admin Actions ========== */
 
+  function setMaximumUnderlying(uint256 _maximumUnderlying) external;
+
   function setPerformanceFee(uint64 _performanceFee) external;
 
   function setFeeRecipient(address _feeRecipient) external;
 
   function setRewardsSeller(IRewardsSeller _rewardsSeller) external;
+
+  function setReserveRatio(uint64 _reserveRatio) external;
 
 /* ========== Balance Queries ========== */
 
@@ -81,4 +104,49 @@ interface INirnVault {
     IErc20Adapter[] memory adapters,
     uint256[] memory weights
   );
+
+/* ========== Liquidity Delta Queries ========== */
+
+  function getCurrentLiquidityDeltas() external view returns (int256[] memory liquidityDeltas);
+  
+  function getHypotheticalLiquidityDeltas(
+    uint256[] calldata proposedWeights
+  ) external view returns (int256[] memory liquidityDeltas);
+  
+  function getHypotheticalLiquidityDeltas(
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external view returns (int256[] memory liquidityDeltas);
+
+/* ========== APR Queries ========== */
+
+  function getAPR() external view returns (uint256);
+
+  function getAPRs() external view returns (uint256[] memory aprs);
+
+  function getHypotheticalAPR(uint256[] memory proposedWeights) external view returns (uint256);
+
+  function getHypotheticalAPR(
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external view returns (uint256);
+
+/* ========== Deposit/Withdraw ========== */
+
+  function deposit(uint256 amount) external returns (uint256 shares);
+
+  function depositTo(uint256 amount, address to) external returns (uint256 shares);
+
+  function withdraw(uint256 shares) external returns (uint256 owed);
+
+/* ========== Rebalance Actions ========== */
+
+  function rebalance() external;
+
+  function rebalanceWithNewWeights(uint256[] calldata proposedWeights) external;
+
+  function rebalanceWithNewAdapters(
+    IErc20Adapter[] calldata proposedAdapters,
+    uint256[] calldata proposedWeights
+  ) external;
 }

@@ -48,7 +48,7 @@ interface IAdapterRegistry {
 
 /* ========== Protocol Queries ========== */
 
-  function getProtocolAdapters() external view returns (address[] memory adapters);
+  function getProtocolAdaptersAndIds() external view returns (address[] memory adapters, uint256[] memory ids);
 
   function getProtocolMetadata(uint256 id) external view returns (address protocolAdapter, string memory name);
 

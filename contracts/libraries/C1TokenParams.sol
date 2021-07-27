@@ -36,6 +36,21 @@ library C1TokenParams {
     }
   }
 
+  function computeSupplyRateV1(
+    address model,
+    uint256 cashPrior,
+    uint256 borrowsPrior,
+    uint256 reservesPrior,
+    uint256 reserveFactorMantissa,
+    int256 liquidityDelta
+  ) internal view returns (uint256) {
+    uint256 underlying = cashPrior.add(liquidityDelta).add(borrowsPrior).sub(reservesPrior).mul(1e18);
+    uint256 borrowsPer = divScalarByExp(borrowsPrior, underlying);
+    uint256 borrowRateMantissa = getBorrowRate(model, cashPrior, borrowsPrior, reservesPrior);
+    uint256 oneMinusReserveFactor = EXP_SCALE.sub(reserveFactorMantissa);
+    return mulExp3(borrowRateMantissa, oneMinusReserveFactor, borrowsPer);
+  }
+
   function getSupplyRateV1(address token, int256 liquidityDelta) internal view returns (uint256) {
     (
       address model,

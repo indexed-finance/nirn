@@ -7,7 +7,6 @@ import '@nomiclabs/hardhat-waffle'
 import 'hardhat-deploy'
 import 'solidity-coverage'
 import 'hardhat-gas-reporter'
-import { proxyResolver } from './test/shared/proxyResolution'
 import { randomBytes } from 'crypto';
 
 const configureNetwork = (network: string, chainId: number) => ({
@@ -19,7 +18,6 @@ const configureNetwork = (network: string, chainId: number) => ({
 export default {
   gasReporter: {
     enabled: true,
-    proxyResolver
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
@@ -33,6 +31,9 @@ export default {
     timeout: 200000
   },
   networks: {
+    coverage: {
+      url: 'http://localhost:8555'
+    },
     hardhat: {
       allowUnlimitedContractSize: false,
       forking: {

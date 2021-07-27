@@ -16,7 +16,7 @@ import "./ERC20.sol";
  * @dev Base contract defining the constant and storage variables
  * for NirnVault, as well as basic state queries and setters.
  */
-contract NirnVaultBase is ERC20, Ownable(), INirnVault {
+abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   using SafeCast for uint256;
   using TransferHelper for address;
   using Fraction for uint256;
@@ -65,6 +65,12 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
   /** @dev Address of contract used to sell rewards. */
   IRewardsSeller public override rewardsSeller;
+
+  /**
+   * @dev Maximum underlying balance that can be deposited.
+   * If zero, no maximum.
+   */
+  uint256 public override maximumUnderlying;
 
   /** @dev Fee taken on profit as a fraction of 1e18. */
   uint64 public override performanceFee = 5e16;
@@ -149,17 +155,32 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
 /* ========== Configuration Controls ========== */
 
+  function setMaximumUnderlying(uint256 _maximumUnderlying) external override onlyOwner {
+    maximumUnderlying = _maximumUnderlying;
+    emit SetMaximumUnderlying(_maximumUnderlying);
+  }
+
   function setPerformanceFee(uint64 _performanceFee) external override onlyOwner {
-    require(_performanceFee <= 2e17, "fee >20%");
+    claimFees(balance(), totalSupply);
+    require(_performanceFee <= 2e17, "fee > 20%");
     performanceFee = _performanceFee;
+    emit SetPerformanceFee(_performanceFee);
+  }
+
+  function setReserveRatio(uint64 _reserveRatio) external override onlyOwner {
+    require(_reserveRatio <= 2e17, "reserve > 20%");
+    reserveRatio = _reserveRatio;
+    emit SetReserveRatio(_reserveRatio);
   }
 
   function setFeeRecipient(address _feeRecipient) external override onlyOwner {
     feeRecipient = _feeRecipient;
+    emit SetFeeRecipient(_feeRecipient);
   }
 
   function setRewardsSeller(IRewardsSeller _rewardsSeller) external override onlyOwner {
     rewardsSeller = _rewardsSeller;
+    emit SetRewardsSeller(address(_rewardsSeller));
   }
 
 /* ========== Reward Token Sale ========== */
@@ -168,7 +189,7 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     uint256 _balance = IERC20(rewardsToken).balanceOf(address(this));
     require(!lockedTokens[rewardsToken] && rewardsToken != underlying, "token locked");
     IRewardsSeller _rewardsSeller = rewardsSeller;
-    require(address(_rewardsSeller) != address(0), "!seller");
+    require(address(_rewardsSeller) != address(0), "null seller");
     rewardsToken.safeTransfer(address(_rewardsSeller), _balance);
     _rewardsSeller.sellRewards(msg.sender, rewardsToken, underlying, params);
   }
@@ -180,12 +201,30 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
       "!unused"
     );
     require(registry.isApprovedAdapter(address(adapter)), "!approved");
-    require(adapter.underlying() == underlying, "bad adapter");
+    address wrapper = adapter.token();
+    wrapper.safeApproveMax(address(adapter));
     uint256 bal = adapter.balanceUnderlying();
     adapter.withdrawUnderlyingUpTo(bal);
+    wrapper.safeUnapprove(address(adapter));
   }
 
 /* ========== Underlying Balance Queries ========== */
+
+  struct BalanceSheet {
+    uint256[] balances;
+    uint256 reserveBalance;
+    uint256 totalBalance;
+    uint256 totalProductiveBalance;
+  }
+
+  function getBalanceSheet(
+    IErc20Adapter[] memory adapters
+  ) internal view returns (BalanceSheet memory sheet) {
+    sheet.balances = adapters.getBalances();
+    sheet.reserveBalance = reserveBalance();
+    sheet.totalBalance = sheet.balances.sum().add(sheet.reserveBalance);
+    sheet.totalProductiveBalance = sheet.totalBalance.mulSubFractionE18(reserveRatio);
+  }
 
   /**
    * @dev Returns the value in `underlying` of the vault's deposits
@@ -224,7 +263,7 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     return profit.mulFractionE18(performanceFee);
   }
 
-  function getPendingFees() public view override returns (uint256) {
+  function getPendingFees() external view override returns (uint256) {
     return calculateFee(balance(), totalSupply);
   }
 
@@ -244,11 +283,11 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
 /* ========== Price Queries ========== */
 
-  function getPricePerFullShare() public view override returns (uint256) {
+  function getPricePerFullShare() external view override returns (uint256) {
     return balance().toFractionE18(totalSupply);
   }
 
-  function getPricePerFullShareWithFee() public view override returns (uint256) {
+  function getPricePerFullShareWithFee() external view override returns (uint256) {
     uint256 totalBalance = balance();
     uint256 supply = totalSupply;
     uint256 pendingFees = calculateFee(totalBalance, supply);
@@ -259,8 +298,7 @@ contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
   function beforeAddAdapter(IErc20Adapter adapter) internal {
     address wrapper = adapter.token();
-    uint256 _allowance = IERC20(wrapper).allowance(address(this), address(adapter));
-    if (_allowance > 0) return;
+    if (IERC20(wrapper).allowance(address(this), address(adapter)) > 0) return;
     lockedTokens[wrapper] = true;
     underlying.safeApproveMax(address(adapter));
     wrapper.safeApproveMax(address(adapter));

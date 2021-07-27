@@ -46,25 +46,12 @@ contract CyErc20Adapter is AbstractErc20Adapter() {
 
 /* ========== Performance Queries ========== */
 
-  function getAPR() external view virtual override returns (uint256) {
-    return ICToken(token).supplyRatePerBlock().mul(2102400);
+  function getAPR() public view virtual override returns (uint256) {
+    return CyTokenParams.getSupplyRate(token, 0);
   }
 
   function getHypotheticalAPR(int256 liquidityDelta) external view virtual override returns (uint256) {
-    ICToken cToken = ICToken(token);
-    (
-      address model,
-      uint256 cashPrior,
-      uint256 borrowsPrior,
-      uint256 reservesPrior,
-      uint256 reserveFactorMantissa
-    ) = CyTokenParams.getInterestRateParameters(address(cToken));
-    return IInterestRateModel(model).getSupplyRate(
-      cashPrior.add(liquidityDelta),
-      borrowsPrior,
-      reservesPrior,
-      reserveFactorMantissa
-    ).mul(2102400);
+    return CyTokenParams.getSupplyRate(token, liquidityDelta);
   }
 
 /* ========== Caller Balance Queries ========== */

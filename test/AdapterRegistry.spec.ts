@@ -1,8 +1,9 @@
 import { expect } from "chai";
-import { constants } from "ethers";
+import { BigNumber, constants, ContractTransaction, Wallet } from "ethers";
 import { waffle } from "hardhat";
-import { AdapterRegistry, TestAdapter } from "../typechain"
-import { deployContract, getBigNumber, resetFork, withSigner } from "./shared";
+import { AdapterRegistry, TestAdapter, TestERC20, TestVault } from "../typechain"
+import { createSnapshot, deployContract, getBigNumber } from "./shared";
+import { deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
 
 const ADDRESS_ONE = `0x${'11'.repeat(20)}`;
 const ADDRESS_TWO = `0x${'22'.repeat(20)}`;
@@ -13,16 +14,33 @@ describe('AdapterRegistry', () => {
 
   let registry: AdapterRegistry
   let adapter: TestAdapter
+  let wrapper: TestVault
   let adapter1: TestAdapter
+  let wrapper1: TestVault
+  let underlying: TestERC20
+  let restoreSnapshot: () => Promise<void>
 
-  const setup = () => before('Deploy registry', async () => {
-    await resetFork()
-    registry = await deployContract('AdapterRegistry')
-    adapter = await deployContract('TestAdapter', ADDRESS_ONE, ADDRESS_TWO, getBigNumber(1000), getBigNumber(10000), getBigNumber(500));
-    adapter1 = await deployContract('TestAdapter', ADDRESS_ONE, ADDRESS_THREE, getBigNumber(1000), getBigNumber(10000), getBigNumber(500));
+  before(async () => {
+    registry = await deployContract('AdapterRegistry');
+    underlying = await deployTestERC20();
+    ({adapter, wrapper} = await deployTestWrapperAndAdapter(underlying.address, getBigNumber(1)));
+    ({adapter: adapter1, wrapper: wrapper1} = await deployTestWrapperAndAdapter(underlying.address, getBigNumber(2)));
+    await underlying.approve(adapter.address, constants.MaxUint256)
+    await underlying.approve(adapter1.address, constants.MaxUint256)
+    await underlying.mint(owner.address, getBigNumber(2))
+    await adapter.deposit(getBigNumber(1))
+    await adapter1.deposit(getBigNumber(1))
+    restoreSnapshot = await createSnapshot()
   })
 
-  describe('addProtocolAdapter', () => {
+  const setup = (approve?: boolean) => before('Deploy registry', async () => {
+    await restoreSnapshot()
+    if (approve) {
+      await registry.addProtocolAdapter(approvedProtocol.address)
+    }
+  })
+
+  describe('addProtocolAdapter()', () => {
     setup()
 
     it('Should revert if not called by owner or protocol adapter', async () => {
@@ -56,7 +74,7 @@ describe('AdapterRegistry', () => {
     })
   })
 
-  describe('removeProtocolAdapter', () => {
+  describe('removeProtocolAdapter()', () => {
     setup()
 
     it('Should revert if not called by owner', async () => {
@@ -87,54 +105,238 @@ describe('AdapterRegistry', () => {
     })
   })
 
-  describe('addTokenAdapter', () => {
+  function testAddAdapter(
+    addTokenAdapter: (signer: Wallet, adapter: string) => Promise<ContractTransaction>
+  ) {
     setup()
 
     it('Should revert if caller is not a protocol adapter', async () => {
-      await expect(registry.addTokenAdapter(ADDRESS_ONE)).to.be.revertedWith('!exists')
+      await expect(addTokenAdapter(owner, ADDRESS_ONE)).to.be.revertedWith('!exists')
     })
 
     it('Should revert if contract does not expose underlying() and token() functions', async () => {
       await registry.addProtocolAdapter(approvedProtocol.address);
-      await expect(registry.connect(approvedProtocol).addTokenAdapter(ADDRESS_ONE)).to.be.reverted
+      await expect(addTokenAdapter(approvedProtocol, ADDRESS_ONE)).to.be.reverted
     })
 
     it('Should allow protocol adapters to add token adapters', async () => {
-      await expect(registry.connect(approvedProtocol).addTokenAdapter(adapter.address))
+      await expect(addTokenAdapter(approvedProtocol, adapter.address))
         .to.emit(registry, 'TokenAdapterAdded')
-        .withArgs(adapter.address, 1, ADDRESS_ONE, ADDRESS_TWO)
+        .withArgs(adapter.address, 1, underlying.address, wrapper.address)
         .to.emit(registry, 'TokenSupportAdded')
-        .withArgs(ADDRESS_ONE)
+        .withArgs(underlying.address)
     })
     
     it('Should add underlying to supportedTokens if it is new', async () => {
-      expect(await registry.getSupportedTokens()).to.deep.eq([ ADDRESS_ONE ])
+      expect(await registry.getSupportedTokens()).to.deep.eq([ underlying.address ])
     })
     
-    it('Should add adapter to tokenAdapters', async () => {
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([ adapter.address ])
+    it('Should add adapter to tokenAdapters list for underlying token', async () => {
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([ adapter.address ])
     })
 
     it('Should map wrapper token to adapter', async () => {
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_TWO)).to.eq(adapter.address)
+      expect(await registry.getAdapterForWrapperToken(wrapper.address)).to.eq(adapter.address)
     })
 
     it('Should revert if wrapper is already mapped to an adapter', async () => {
-      await expect(registry.connect(approvedProtocol).addTokenAdapter(adapter.address)).to.be.revertedWith('adapter exists')
+      await expect(addTokenAdapter(approvedProtocol, adapter.address)).to.be.revertedWith('adapter exists')
     })
     
     it('Should not change supportedTokens if underlying token is not new', async () => {
-      await expect(registry.connect(approvedProtocol).addTokenAdapter(adapter1.address))
+      await expect(addTokenAdapter(approvedProtocol, adapter1.address))
         .to.emit(registry, 'TokenAdapterAdded')
-        .withArgs(adapter1.address, 1, ADDRESS_ONE, ADDRESS_THREE)
+        .withArgs(adapter1.address, 1, underlying.address, wrapper1.address)
         .to.not.emit(registry, 'TokenSupportAdded')
-      expect(await registry.getSupportedTokens()).to.deep.eq([ ADDRESS_ONE ])
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([ adapter.address, adapter1.address ])
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_THREE)).to.eq(adapter1.address)
+      expect(await registry.getSupportedTokens()).to.deep.eq([ underlying.address ])
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([ adapter.address, adapter1.address ])
+      expect(await registry.getAdapterForWrapperToken(wrapper1.address)).to.eq(adapter1.address)
+      expect(await registry.isSupported(underlying.address)).to.be.true
+    })
+  }
+
+  describe('addTokenAdapter()', () => {
+    testAddAdapter(
+      async (signer, _adapter) => registry.connect(signer).addTokenAdapter(_adapter)
+    )
+  })
+
+  describe('addTokenAdapters()', () => {
+    testAddAdapter(
+      async (signer, _adapter) => registry.connect(signer).addTokenAdapters([_adapter])
+    )
+  })
+
+  describe('getAdaptersCount()', () => {
+    setup(true)
+
+    it('Should return number of adapters for underlying token', async () => {
+      expect(await registry.getAdaptersCount(underlying.address)).to.eq(0)
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter1.address)
+      expect(await registry.getAdaptersCount(underlying.address)).to.eq(1)
     })
   })
 
-  describe('removeTokenAdapter', () => {
+  describe('isApprovedAdapter', () => {
+    setup(true)
+
+    it('Should return true for registered adapter', async () => {
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter.address)
+      expect(await registry.isApprovedAdapter(adapter.address)).to.be.true
+    })
+
+    it('Should return false if adapter not registered', async () => {
+      const newAdapter = await deployContract('TestAdapter', underlying.address, wrapper.address, getBigNumber(1))
+      expect(await registry.isApprovedAdapter(newAdapter.address)).to.be.false
+    })
+  })
+
+  describe('getProtocolMetadata()', () => {
+    setup()
+
+    it('Should revert if protocolId does not exist', async () => {
+      await expect(registry.getProtocolMetadata(1)).to.be.revertedWith('invalid id')
+    })
+
+    it('Should return protocol address and name for protocolId', async () => {
+      const protocol = await deployContract('TestProtocolAdapter')
+      await registry.addProtocolAdapter(protocol.address)
+      const { name, protocolAdapter } = await registry.getProtocolMetadata(1)
+      expect(name).to.eq('Test Protocol')
+      expect(protocolAdapter).to.eq(protocol.address)
+    })
+  })
+
+  describe('getProtocolForTokenAdapter()', () => {
+    setup(true)
+
+    it('Should revert if adapter not approved', async () => {
+      await expect(registry.getProtocolForTokenAdapter(adapter.address)).to.be.revertedWith('!approved')
+    })
+
+    it('Should return protocol adapter address', async () => {
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter.address)
+      expect(await registry.getProtocolForTokenAdapter(adapter.address)).to.eq(approvedProtocol.address)
+    })
+  })
+
+  describe('getAdaptersSortedByAPR()', () => {
+    setup(true)
+
+    it('Should return empty list if no adapters registered', async () => {
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPR(underlying.address)
+      expect(adapters).to.deep.eq([])
+      expect(aprs).to.deep.eq([])
+    })
+
+    it('Should return adapters in descending order of APR', async () => {
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter.address)
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter1.address)
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPR(underlying.address)
+      expect(adapters).to.deep.eq([adapter1.address, adapter.address])
+      expect(aprs).to.deep.eq([getBigNumber(2), getBigNumber(1)])
+    })
+
+    it('Should use 0 if getAPR reverts', async () => {
+      await adapter.setRevertOnAPRQQuery(true)
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPR(underlying.address)
+      expect(adapters).to.deep.eq([adapter1.address, adapter.address])
+      expect(aprs).to.deep.eq([getBigNumber(2), BigNumber.from(0)])
+    })
+  })
+
+  describe('getAdaptersSortedByAPRWithDeposit()', () => {
+    setup(true)
+
+    it('Should return empty list if no adapters registered', async () => {
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPRWithDeposit(underlying.address, getBigNumber(1), constants.AddressZero)
+      expect(adapters).to.deep.eq([])
+      expect(aprs).to.deep.eq([])
+    })
+
+    it('Should return adapters in descending order of hypothetical APR', async () => {
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter.address)
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter1.address)
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPRWithDeposit(underlying.address, getBigNumber(1), constants.AddressZero)
+      expect(adapters).to.deep.eq([adapter1.address, adapter.address])
+      expect(aprs).to.deep.eq([getBigNumber(1), getBigNumber(5, 17)])
+    })
+
+    it('Should use current APR for excludedAdapter', async () => {
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPRWithDeposit(underlying.address, getBigNumber(1), adapter.address)
+      expect(adapters).to.deep.eq([adapter.address, adapter1.address])
+      expect(aprs).to.deep.eq([getBigNumber(1), getBigNumber(1)])
+    })
+
+    it('Should use 0 if getAPR reverts', async () => {
+      await adapter.setRevertOnAPRQQuery(true)
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPRWithDeposit(underlying.address, getBigNumber(1), adapter.address)
+      expect(adapters).to.deep.eq([adapter1.address, adapter.address])
+      expect(aprs).to.deep.eq([getBigNumber(1), BigNumber.from(0)])
+    })
+
+    it('Should use 0 if getHypotheticalAPR reverts', async () => {
+      await adapter.setRevertOnAPRQQuery(false)
+      await adapter1.setRevertOnAPRQQuery(true)
+      const { adapters, aprs } = await registry.getAdaptersSortedByAPRWithDeposit(underlying.address, getBigNumber(1), constants.AddressZero)
+      expect(adapters).to.deep.eq([adapter.address, adapter1.address])
+      expect(aprs).to.deep.eq([getBigNumber(5, 17), BigNumber.from(0)])
+    })
+  })
+
+  describe('getAdapterWithHighestAPR()', () => {
+    setup(true)
+
+    it('Should return adapter with highest APR', async () => {
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter.address)
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter1.address)
+      const { apr, adapter: highestAPRAdapter } = await registry.getAdapterWithHighestAPR(underlying.address)
+      expect(highestAPRAdapter).to.eq(adapter1.address)
+      expect(apr).to.eq(getBigNumber(2))
+    })
+  })
+
+  describe('getAdapterWithHighestAPRForDeposit()', () => {
+    setup(true)
+
+    it('Should return adapter with highest APR', async () => {
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter.address)
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter1.address)
+      const { apr, adapter: highestAPRAdapter } = await registry.getAdapterWithHighestAPRForDeposit(underlying.address, getBigNumber(1), constants.AddressZero)
+      expect(highestAPRAdapter).to.eq(adapter1.address)
+      expect(apr).to.eq(getBigNumber(1))
+    })
+  })
+
+  describe('getProtocolAdaptersAndIds()', () => {
+    setup()
+
+    it('Should return empty list when no adapters are registered', async () => {
+      const {adapters, ids} = await registry.getProtocolAdaptersAndIds()
+      expect(adapters).to.deep.eq([])
+      expect(ids).to.deep.eq([])
+    })
+
+    it('Should return list of protocol adapters', async () => {
+      await registry.addProtocolAdapter(approvedProtocol.address)
+      const {adapters, ids} = await registry.getProtocolAdaptersAndIds()
+      expect(adapters).to.deep.eq([approvedProtocol.address])
+      expect(ids).to.deep.eq([BigNumber.from(1)])
+    })
+
+    it('Should not include removed adapters', async () => {
+      await registry.removeProtocolAdapter(approvedProtocol.address)
+      const {adapters, ids} = await registry.getProtocolAdaptersAndIds()
+      expect(adapters).to.deep.eq([])
+      expect(ids).to.deep.eq([])
+    })
+  })
+
+  // describe('getProtocolAdapters()', () => {
+
+  // })
+
+  describe('removeTokenAdapter()', () => {
     setup()
 
     before(async () => {
@@ -151,41 +353,44 @@ describe('AdapterRegistry', () => {
       await expect(registry.connect(notOwner).removeTokenAdapter(adapter.address)).to.be.revertedWith('!authorized')
     })
 
+    it('Should revert if wrong adapter given for wrapper', async () => {
+      const badAdapter = await deployContract('TestAdapter', underlying.address, wrapper.address, getBigNumber(1))
+      await expect(
+        registry.removeTokenAdapter(badAdapter.address)
+      ).to.be.revertedWith('wrong adapter')
+    })
+
     it('Should allow owner to remove any token adapter', async () => {
       await expect(registry.removeTokenAdapter(adapter.address))
         .to.emit(registry, 'TokenAdapterRemoved')
-        .withArgs(adapter.address, 1, ADDRESS_ONE, ADDRESS_TWO)
+        .withArgs(adapter.address, 1, underlying.address, wrapper.address)
         .to.not.emit(registry, 'TokenSupportRemoved')
     })
 
     it('Should remove mapping from wrapper to adapter', async () => {
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_TWO)).to.eq(constants.AddressZero)
+      expect(await registry.getAdapterForWrapperToken(wrapper.address)).to.eq(constants.AddressZero)
     })
 
     it('Should remove adapter from list of adapters for underlying', async () => {
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([adapter1.address])
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([adapter1.address])
     })
 
     it('Should not remove underlying from supported tokens if there are other adapters for it', async () => {
-      expect(await registry.getSupportedTokens()).to.deep.eq([ ADDRESS_ONE ])
+      expect(await registry.getSupportedTokens()).to.deep.eq([ underlying.address ])
     })
 
     it('Should allow protocol adapter to remove token adapters it registered', async () => {
       await expect(registry.connect(approvedProtocol).removeTokenAdapter(adapter1.address))
         .to.emit(registry, 'TokenAdapterRemoved')
-        .withArgs(adapter1.address, 1, ADDRESS_ONE, ADDRESS_THREE)
+        .withArgs(adapter1.address, 1, underlying.address, wrapper1.address)
         .to.emit(registry, 'TokenSupportRemoved')
-        .withArgs(ADDRESS_ONE)
-      expect(await registry.getAdapterForWrapperToken(ADDRESS_THREE)).to.eq(constants.AddressZero)
-      expect(await registry.getAdaptersList(ADDRESS_ONE)).to.deep.eq([])
+        .withArgs(underlying.address)
+      expect(await registry.getAdapterForWrapperToken(wrapper1.address)).to.eq(constants.AddressZero)
+      expect(await registry.getAdaptersList(underlying.address)).to.deep.eq([])
     })
 
     it('Should remove underlying from supported tokens if there are no other adapters for it', async () => {
       expect(await registry.getSupportedTokens()).to.deep.eq([])
     })
   })
-
-  // describe('getProtocolAdapters', () => {
-
-  // })
 })

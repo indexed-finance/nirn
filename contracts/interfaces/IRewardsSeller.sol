@@ -16,5 +16,5 @@ interface IRewardsSeller {
     address rewardsToken,
     address underlyingToken,
     bytes calldata params
-  ) external returns (uint256 underlyingBought);
+  ) external;
 }
