@@ -1,12 +1,12 @@
 import { getAddress } from "@ethersproject/address"
 import { AaveV1Erc20Adapter } from "../../typechain"
-import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
+import { shouldBehaveLikeEtherAdapter } from "../EtherAdapterBehavior.spec"
 import { deployContract, AaveV1Converter } from '../shared'
 
 
 describe('AaveV1EtherAdapter', () => {
   const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`a${symbol}`, function () {
-    shouldBehaveLikeErc20Adapter(
+    shouldBehaveLikeEtherAdapter(
       async () => (await deployContract('AaveV1EtherAdapter', '0x24a42fD28C976A61Df5D00D0599C34c4f90748c8')) as AaveV1Erc20Adapter,
       async (adapter, underlying, token) => adapter.initialize(underlying.address, token.address),
       AaveV1Converter,
