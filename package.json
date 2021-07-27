@@ -57,6 +57,9 @@
   "scripts": {
     "lint": "hardhat check",
     "compile": "hardhat compile",
+    "coverage:registry": "hardhat coverage --solcoverjs .registry.solcover.js --testfiles \"test/AdapterRegistry.spec.ts\"",
+    "coverage:vault": "hardhat coverage --testfiles \"test/NirnVault.spec.ts\"",
+    "generate-tests": "yarn test test/TestMapper.spec.ts",
     "test": "hardhat test"
   },
   "repository": {
