@@ -1,7 +1,7 @@
 import { getAddress } from "@ethersproject/address"
-import { IErc20Adapter } from "../../typechain"
-import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
-import { deployContract, IronBankConverter } from '../shared'
+import { IErc20Adapter } from "../../../typechain"
+import { shouldBehaveLikeErc20Adapter } from "../../Erc20AdapterBehavior.spec"
+import { deployContract, IronBankConverter } from '../../shared'
 
 
 describe('CyErc20Adapter', () => {

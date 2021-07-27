@@ -1,8 +1,8 @@
 import { getAddress } from "@ethersproject/address"
 import { constants } from "ethers"
-import { FulcrumErc20Adapter } from "../../typechain"
-import { shouldBehaveLikeEtherAdapter } from "../EtherAdapterBehavior.spec"
-import { deployContract, FulcrumConverter } from '../shared'
+import { FulcrumErc20Adapter } from "../../../typechain"
+import { shouldBehaveLikeEtherAdapter } from "../../EtherAdapterBehavior.spec"
+import { deployContract, FulcrumConverter } from '../../shared'
 
 describe('FulcrumEtherAdapter', () => {
   const testAdapter = (_underlying: string, _itoken: string, symbol: string) => describe(`i${symbol}`, function () {

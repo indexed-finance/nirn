@@ -2,7 +2,7 @@ import { getAddress } from "@ethersproject/address"
 import { formatEther } from "@ethersproject/units"
 import { expect } from "chai"
 import { constants } from "ethers"
-import { FulcrumErc20Adapter } from "../../typechain"
+import { FulcrumErc20Adapter } from "../../../typechain"
 import {
   setupAdapterContext,
   shouldBehaveLikeErc20AdapterInitialize,
@@ -11,8 +11,8 @@ import {
   shouldBehaveLikeErc20AdapterWithdraw,
   shouldBehaveLikeErc20AdapterWithdrawAll,
   shouldBehaveLikeErc20AdapterWithdrawUnderlying
-} from "../Erc20AdapterBehavior.spec"
-import { deployContract, FulcrumConverter, getBigNumber, sendTokenTo, sendTokenToFrom } from '../shared'
+} from "../../Erc20AdapterBehavior.spec"
+import { deployContract, FulcrumConverter, getBigNumber, sendTokenTo, sendTokenToFrom } from '../../shared'
 
 describe('FulcrumErc20Adapter', () => {
   const testAdapter = (_underlying: string, _ctoken: string, symbol: string) => describe(`i${symbol}`, function () {

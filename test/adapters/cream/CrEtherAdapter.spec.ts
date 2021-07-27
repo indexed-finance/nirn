@@ -1,7 +1,7 @@
 import { getAddress } from "@ethersproject/address"
-import { CrErc20Adapter } from "../../typechain"
-import { shouldBehaveLikeEtherAdapter } from "../EtherAdapterBehavior.spec"
-import { deployContract, CreamConverter } from '../shared'
+import { CrErc20Adapter } from "../../../typechain"
+import { shouldBehaveLikeEtherAdapter } from "../../EtherAdapterBehavior.spec"
+import { deployContract, CreamConverter } from '../../shared'
 
 
 describe('CrEtherAdapter', () => {

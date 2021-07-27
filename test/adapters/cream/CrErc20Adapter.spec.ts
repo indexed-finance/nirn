@@ -1,7 +1,7 @@
 import { getAddress } from "@ethersproject/address"
-import { CrErc20Adapter } from "../../typechain"
-import { shouldBehaveLikeErc20Adapter } from "../Erc20AdapterBehavior.spec"
-import { deployContract, CreamConverter } from '../shared'
+import { CrErc20Adapter } from "../../../typechain"
+import { shouldBehaveLikeErc20Adapter } from "../../Erc20AdapterBehavior.spec"
+import { deployContract, CreamConverter } from '../../shared'
 
 
 describe('CrErc20Adapter', () => {

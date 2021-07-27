@@ -1,7 +1,7 @@
 import { getAddress } from "@ethersproject/address"
-import { AaveV1Erc20Adapter } from "../../typechain"
-import { shouldBehaveLikeEtherAdapter } from "../EtherAdapterBehavior.spec"
-import { deployContract, AaveV1Converter } from '../shared'
+import { AaveV1Erc20Adapter } from "../../../typechain"
+import { shouldBehaveLikeEtherAdapter } from "../../EtherAdapterBehavior.spec"
+import { deployContract, AaveV1Converter } from '../../shared'
 
 
 describe('AaveV1EtherAdapter', () => {

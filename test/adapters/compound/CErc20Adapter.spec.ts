@@ -1,14 +1,14 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
 import { getAddress } from "@ethersproject/address"
-import { IComptroller, IERC20, IErc20Adapter, TestComptrollerLens } from "../../typechain"
+import { IComptroller, IERC20, IErc20Adapter, TestComptrollerLens } from "../../../typechain"
 import {
   setupAdapterContext,
   shouldBehaveLikeErc20AdapterDeposit,
   shouldBehaveLikeErc20AdapterInitialize,
   shouldBehaveLikeErc20AdapterQueries,
-} from "../Erc20AdapterBehavior.spec"
-import { advanceBlock, deployContract, getIERC20, CompoundConverter, sendTokenToFrom, getBigNumber, createBalanceCheckpoint } from '../shared'
+} from "../../Erc20AdapterBehavior.spec"
+import { advanceBlock, deployContract, getIERC20, CompoundConverter, sendTokenToFrom, getBigNumber, createBalanceCheckpoint } from '../../shared'
 
 describe('CErc20Adapter', () => {
   let comp: IERC20
