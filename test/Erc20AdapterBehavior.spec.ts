@@ -1,10 +1,24 @@
 import { expect } from 'chai'
 import { BigNumber, constants, Contract, ContractTransaction } from 'ethers'
-import { waffle } from 'hardhat'
-import { getContract, sendTokenTo, getBigNumber, deployClone, sendTokenToFrom, getTokenDecimals, createSnapshot, createBalanceCheckpoint } from './shared'
-import { ConvertHelper } from './shared/conversion'
-import { IERC20, IErc20Adapter } from '../typechain'
+import { ethers, waffle } from 'hardhat'
+import {
+  getContract,
+  sendTokenTo,
+  getBigNumber,
+  deployClone,
+  sendTokenToFrom,
+  getTokenDecimals,
+  createSnapshot,
+  createBalanceCheckpoint,
+  WETH,
+  sendEtherToFrom,
+  sendEtherTo,
+} from './shared'
+import { ConvertHelper } from '../@types/augmentations'
+import { IERC20, IErc20Adapter, IWETH } from '../typechain'
 import { formatEther } from '@ethersproject/units'
+import { getAddress } from '@ethersproject/address'
+import { Context } from 'mocha'
 
 function relativeDiff(a: BigNumber, b: BigNumber) {
   return parseFloat(formatEther(a.sub(b).abs().mul(getBigNumber(1)).div(b)));
@@ -42,6 +56,11 @@ export const setupAdapterContext = (
     this.decimals = await getTokenDecimals(this.underlying)
     this.converter = converter
 
+    const isETH = (
+      this.underlying.address === getAddress(WETH) &&
+      !this.converter.useWrappedEther
+    );
+
     this.toUnderlying = (amount: BigNumber) => this.converter.toUnderlying(this.wrapper, amount)
     this.toWrapped = (amount: BigNumber, withdrawUnderlying?: boolean) => this.converter.toWrapped(this.wrapper, amount, withdrawUnderlying)
     this.getTokenAmount = (n) => getBigNumber(n, this.decimals)
@@ -51,8 +70,18 @@ export const setupAdapterContext = (
       if (supply.lt(tokenAmount)) {
         tokenAmount = supply.div(100);
       }
-      await sendTokenTo(_underlying, this.wallet.address, tokenAmount)
+      if (isETH) {
+        await sendEtherTo(this.wallet.address, tokenAmount)
+        await (await getContract<IWETH>(this.underlying.address, 'IWETH')).deposit({ value: tokenAmount })
+      } else {
+        await sendTokenTo(_underlying, this.wallet.address, tokenAmount)
+      }
       return tokenAmount
+    }
+    this.getExpectedLiquidity = async () => {
+      const liquidityHolder = await this.converter.liquidityHolder(this.wrapper)
+      if (isETH) return ethers.provider.getBalance(liquidityHolder)
+      return this.underlying.balanceOf(liquidityHolder)
     }
 
     this.adapter = await getImplementation()
@@ -165,9 +194,18 @@ export function shouldBehaveLikeErc20AdapterWithdrawUnderlying() {
 }
 
 export function shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo() {
+  async function sendToken (this: Context, amount: BigNumber) {
+    const liquidityHolder = await this.converter.liquidityHolder(this.wrapper)
+    if (this.underlying.address === getAddress(WETH) && !this.converter.useWrappedEther) {
+      await sendEtherToFrom(liquidityHolder, `0x${'ff'.repeat(20)}`, amount)
+    } else {
+      await sendTokenToFrom(this.underlying, liquidityHolder, `0x${'ff'.repeat(20)}`, amount)
+    }
+  }
+
   beforeEach(async function () {
     await this.resetTests()
-    await sendTokenToFrom(this.underlying, await this.converter.liquidityHolder(this.wrapper), `0x${'ff'.repeat(20)}`, await this.adapter.availableLiquidity({ blockTag: 'pending' }))
+    await sendToken.bind(this)(await this.adapter.availableLiquidity({ blockTag: 'pending' }))
     await this.adapter.deposit(this.amountDeposited)
   })
 
@@ -178,7 +216,7 @@ export function shouldBehaveLikeErc20AdapterWithdrawUnderlyingUpTo() {
   it('Should withdraw min(amount, available)', async function () {
     const balanceUnderlying = await this.adapter.balanceUnderlying({ blockTag: 'pending' })
     const halfBalance = balanceUnderlying.div(2)
-    await sendTokenToFrom(this.underlying, await this.converter.liquidityHolder(this.wrapper), `0x${'ff'.repeat(20)}`, halfBalance)
+    await sendToken.bind(this)(halfBalance)
     const available = await this.adapter.availableLiquidity({ blockTag: 'pending' })
     await expect(this.adapter.withdrawUnderlyingUpTo(balanceUnderlying))
       .to.emit(this.underlying, 'Transfer')
@@ -309,7 +347,7 @@ export function shouldBehaveLikeErc20AdapterQueries() {
     it('Positive delta should decrease APR', async function () {
       const apr = await this.adapter.getAPR()
       if (apr.gt(0)) {
-        const delta = (await this.underlying.balanceOf(await this.converter.liquidityHolder(this.wrapper))).div(10)
+        const delta = (await this.adapter.availableLiquidity()).div(10)
         expect(await this.adapter.getHypotheticalAPR(delta)).to.be.lt(apr)
       }
     })
@@ -317,7 +355,7 @@ export function shouldBehaveLikeErc20AdapterQueries() {
     it('Negative delta should increase APR', async function () {
       const apr = await this.adapter.getAPR()
       if (apr.gt(0)) {
-        const delta = (await this.underlying.balanceOf(await this.converter.liquidityHolder(this.wrapper))).div(-10)
+        const delta = (await this.adapter.availableLiquidity()).div(-10)
         expect(await this.adapter.getHypotheticalAPR(delta)).to.be.gt(apr)
       }
     })
