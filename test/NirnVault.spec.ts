@@ -41,7 +41,8 @@ describe('NirnVault', () => {
       wrapper3,
       registry
     } = await deployTestAdaptersAndRegistry())
-    vault = await deployContract('TestNirnVault', registry.address, constants.AddressZero, underlying.address, constants.AddressZero, feeRecipient.address)
+    vault = await deployContract('TestNirnVault', registry.address, constants.AddressZero)
+    await vault.initialize(underlying.address, constants.AddressZero, feeRecipient.address)
     await underlying.approve(vault.address, constants.MaxUint256)
     restoreSnapshot = await createSnapshot()
   })
@@ -58,8 +59,14 @@ describe('NirnVault', () => {
     before(() => reset(withDeposit))
   }
 
-  describe('Constructor', () => {
+  describe('Constructor & Initializer', () => {
     setupTests()
+
+    it('Should not allow second initialization', async () => {
+      await expect(
+        vault.initialize(underlying.address, constants.AddressZero, feeRecipient.address)
+      ).to.be.revertedWith('already initialized')
+    })
 
     it('Should add wrapper to lockedTokens', async () => {
       expect(await vault.lockedTokens(wrapper1.address)).to.be.true
@@ -560,9 +567,16 @@ describe('NirnVault', () => {
       await expect(vault.deposit(ONE_E18)).to.be.revertedWith('TH:STF')
     })
 
-    it('Should revert if new underlying amount', async () => {
+    it('Should revert if new underlying amount exceeds maximum', async () => {
+      await underlying.mint(wallet.address, ONE_E18)
       await vault.setMaximumUnderlying(getBigNumber(5, 17))
       await expect(vault.deposit(ONE_E18)).to.be.revertedWith('maximumUnderlying')
+    })
+
+    it('Should not revert if new underlying amount is less than maximum', async () => {
+      await underlying.mint(wallet.address, ONE_E18)
+      await vault.setMaximumUnderlying(TEN_E18)
+      await expect(vault.deposit(ONE_E18)).to.not.be.reverted
     })
 
     it('Should mint 1 vault token per underlying on first deposit', async () => {
@@ -667,6 +681,97 @@ describe('NirnVault', () => {
         [0, ONE_E18]
       )
       await expect(vault.withdraw(getBigNumber(55, 17)))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter1.address, vault.address, getBigNumber(45, 17))
+      const { adapters, weights } = await vault.getAdaptersAndWeights()
+      expect(adapters).to.deep.eq([adapter2.address])
+      expect(weights).to.deep.eq([ONE_E18])
+      expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(45, 17))
+    })
+  })
+  
+  describe('withdrawUnderlying()', () => {
+    beforeEach(() => reset(true))
+
+    it('Should send from vault if it has sufficient reserves', async () => {
+      await expect(vault.withdrawUnderlying(FIVE_E18))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, wallet.address, FIVE_E18)
+      expect(await vault.balanceOf(wallet.address)).to.eq(FIVE_E18)
+    })
+
+    it('Should withdraw from adapters if vault has insufficient reserves, and should try to replenish new reserves', async () => {
+      await vault.rebalance()
+      const newReserves = toReserve(FIVE_E18)
+      await expect(vault.withdrawUnderlying(FIVE_E18))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter1.address, vault.address, getBigNumber(4).add(newReserves))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, wallet.address, FIVE_E18)
+      expect(await vault.balanceOf(wallet.address)).to.eq(FIVE_E18)
+    })
+
+    it('Should withdraw from adapters until vault has sufficient balance', async () => {
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter1.address, adapter2.address],
+        [getBigNumber(5, 17), getBigNumber(5, 17)]
+      )
+      await vault.rebalance()
+      const newReserves = toReserve(getBigNumber(4))
+      await expect(vault.withdrawUnderlying(getBigNumber(6)))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter1.address, vault.address, getBigNumber(45, 17))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter2.address, vault.address, getBigNumber(5, 17).add(newReserves))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, wallet.address, getBigNumber(6))
+      expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(4))
+    })
+
+    it('Should claim fees if any are owed', async () => {
+      await underlying.mint(vault.address, TEN_E18)
+      await vault.rebalance()
+      const amount = FIVE_E18
+      const fees = getBigNumber(5, 17)
+      const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(195, 17))
+      const newReserves = toReserve(getBigNumber(15))
+      const underlyingWithdrawn = amount.add(newReserves).sub(getBigNumber(2))
+      const sharesBurned = amount.mul(TEN_E18.add(sharesForFees)).div(getBigNumber(20))
+      await expect(vault.withdrawUnderlying(amount))
+        .to.emit(underlying, 'Transfer')
+        .withArgs(adapter1.address, vault.address, underlyingWithdrawn)
+        .to.emit(vault, 'Transfer')
+        .withArgs(constants.AddressZero, feeRecipient.address, sharesForFees)
+        .to.emit(vault, 'Transfer')
+        .withArgs(wallet.address, constants.AddressZero, sharesBurned)
+        .to.emit(vault, 'FeesClaimed')
+        .withArgs(fees, sharesForFees)
+        .to.emit(underlying, 'Transfer')
+        .withArgs(vault.address, wallet.address, amount)
+      expect(
+        await vault.priceAtLastFee()
+      ).to.eq(
+        getBigNumber(20).mul(ONE_E18).div(getBigNumber(10).add(sharesForFees))
+      )
+      expect(
+        diff(
+          await vault.getPricePerFullShare(),
+          await vault.priceAtLastFee()
+        )
+      ).to.be.lte(1)
+    })
+
+    it('Should remove adapters with weight 0 if full balance withdrawn', async () => {
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter1.address, adapter2.address],
+        [getBigNumber(5, 17), getBigNumber(5, 17)]
+      )
+      await vault.rebalance()
+      await vault.setAdaptersAndWeightsInternal(
+        [adapter1.address, adapter2.address],
+        [0, ONE_E18]
+      )
+      await expect(vault.withdrawUnderlying(getBigNumber(55, 17)))
         .to.emit(underlying, 'Transfer')
         .withArgs(adapter1.address, vault.address, getBigNumber(45, 17))
       const { adapters, weights } = await vault.getAdaptersAndWeights()
