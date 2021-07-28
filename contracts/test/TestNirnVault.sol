@@ -8,11 +8,8 @@ import "../vaults/NirnVault.sol";
 contract TestNirnVault is NirnVault {
   constructor(
     address _registry,
-    address _eoaSafeCaller,
-    address _underlying,
-    address _rewardsSeller,
-    address _feeRecipient
-  ) NirnVault(_registry, _eoaSafeCaller, _underlying, _rewardsSeller, _feeRecipient) {}
+    address _eoaSafeCaller
+  ) NirnVault(_registry, _eoaSafeCaller) {}
 
   function setAdaptersAndWeightsInternal(
     IErc20Adapter[] calldata adapters,
