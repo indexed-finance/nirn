@@ -46,16 +46,16 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   /** @dev Address of a contract which can only execute specific functions and only allows EOAs to call. */
   address public immutable override eoaSafeCaller;
 
+/* ========== Storage ========== */
+
   /** @dev Underlying asset for the vault. */
-  address public immutable override underlying;
+  address public override underlying;
 
   /** @dev ERC20 name */
   string public override name;
 
   /** @dev ERC20 symbol */
   string public override symbol;
-
-/* ========== Storage ========== */
 
   /** @dev Tokens which can not be sold - wrapper tokens used by the adapters. */
   mapping(address => bool) public override lockedTokens;
@@ -127,27 +127,24 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
 /* ========== Constructor ========== */
 
-  constructor(
-    address _registry,
-    address _eoaSafeCaller,
+  constructor(address _registry, address _eoaSafeCaller) {
+    registry = IAdapterRegistry(_registry);
+    eoaSafeCaller = _eoaSafeCaller;
+  }
+
+  function initialize(
     address _underlying,
     address _rewardsSeller,
     address _feeRecipient
-  ) {
-    registry = IAdapterRegistry(_registry);
-    eoaSafeCaller = _eoaSafeCaller;
+  ) external override {
+    require(underlying == address(0), "already initialized");
     underlying = _underlying;
     feeRecipient = _feeRecipient;
     rewardsSeller = IRewardsSeller(_rewardsSeller);
 
-    (address adapter,) = IAdapterRegistry(_registry).getAdapterWithHighestAPR(_underlying);
+    (address adapter,) = registry.getAdapterWithHighestAPR(_underlying);
     packedAdaptersAndWeights.push(AdapterHelper.packAdapterAndWeight(IErc20Adapter(adapter), 1e18));
-    // _beforeAddAdapter logic
-    // Can't use the function because immutables (underlying) can't be read in constructor.
-    _underlying.safeApproveMax(adapter);
-    address wrapper = IErc20Adapter(adapter).token();
-    wrapper.safeApproveMax(adapter);
-    lockedTokens[wrapper] = true;
+    beforeAddAdapter(IErc20Adapter(adapter));
 
     name = SymbolHelper.getPrefixedName("Indexed ", _underlying);
     symbol = SymbolHelper.getPrefixedSymbol("n", _underlying);
