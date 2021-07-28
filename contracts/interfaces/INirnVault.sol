@@ -36,6 +36,14 @@ interface INirnVault {
   /** @dev Emitted when rewards seller contract is set. */
   event SetRewardsSeller(address rewardsSeller);
 
+/* ========== Initializer ========== */
+
+  function initialize(
+    address _underlying,
+    address _rewardsSeller,
+    address _feeRecipient
+  ) external;
+
 /* ========== Config Queries ========== */
 
   function minimumAPRImprovement() external view returns (uint256);
@@ -138,6 +146,8 @@ interface INirnVault {
   function depositTo(uint256 amount, address to) external returns (uint256 shares);
 
   function withdraw(uint256 shares) external returns (uint256 owed);
+
+  function withdrawUnderlying(uint256 amount) external returns (uint256 shares);
 
 /* ========== Rebalance Actions ========== */
 

@@ -25,11 +25,8 @@ contract NirnVault is NirnVaultBase {
 
   constructor(
     address _registry,
-    address _eoaSafeCaller,
-    address _underlying,
-    address _rewardsSeller,
-    address _feeRecipient
-  ) NirnVaultBase(_registry, _eoaSafeCaller, _underlying, _rewardsSeller, _feeRecipient) {}
+    address _eoaSafeCaller
+  ) NirnVaultBase(_registry, _eoaSafeCaller) {}
 
 /* ========== Liquidity Delta Queries ========== */
 
@@ -138,22 +135,52 @@ contract NirnVault is NirnVaultBase {
     _mint(to, shares);
   }
 
-  function withdraw(uint256 shares) external override returns (uint256 owed) {
+  function withdraw(uint256 shares) external override returns (uint256 amountOut) {
     (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
     BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
     uint256 supply = claimFees(balanceSheet.totalBalance, totalSupply);
-    owed = shares.mul(balanceSheet.totalBalance) / supply;
+    amountOut = shares.mul(balanceSheet.totalBalance) / supply;
+    withdrawInternal(
+      shares,
+      amountOut,
+      adapters,
+      weights,
+      balanceSheet
+    );
+  }
+
+  function withdrawUnderlying(uint256 amount) external override returns (uint256 shares) {
+    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
+    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
+    uint256 supply = claimFees(balanceSheet.totalBalance, totalSupply);
+    shares = amount.mul(supply) / balanceSheet.totalBalance;
+    withdrawInternal(
+      shares,
+      amount,
+      adapters,
+      weights,
+      balanceSheet
+    );
+  }
+
+  function withdrawInternal(
+    uint256 shares,
+    uint256 amountOut,
+    IErc20Adapter[] memory adapters,
+    uint256[] memory weights,
+    BalanceSheet memory balanceSheet
+  ) internal {
     _burn(msg.sender, shares);
-    uint256 newReserves = balanceSheet.totalBalance.sub(owed).mulFractionE18(reserveRatio);
+    uint256 newReserves = balanceSheet.totalBalance.sub(amountOut).mulFractionE18(reserveRatio);
     withdrawToMatchAmount(
       adapters,
       weights,
       balanceSheet.balances,
       balanceSheet.reserveBalance,
-      owed,
+      amountOut,
       newReserves
     );
-    _transferOut(msg.sender, owed);
+    _transferOut(msg.sender, amountOut);
   }
 
   function withdrawToMatchAmount(
