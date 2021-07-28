@@ -583,6 +583,8 @@ describe('NirnVault', () => {
       await underlying.mint(wallet.address, TEN_E18)
       await underlying.approve(vault.address, constants.MaxUint256);
       await expect(vault.deposit(TEN_E18))
+        .to.emit(vault, 'Deposit')
+        .withArgs(TEN_E18, TEN_E18)
         .to.emit(underlying, 'Transfer')
         .withArgs(wallet.address, vault.address, TEN_E18)
         .to.emit(vault, 'Transfer')
@@ -606,6 +608,8 @@ describe('NirnVault', () => {
         .withArgs(constants.AddressZero, feeRecipient.address, feeShares)
         .to.emit(vault, 'Transfer')
         .withArgs(constants.AddressZero, wallet.address, shares)
+        .to.emit(vault, 'Deposit')
+        .withArgs(shares, TEN_E18)
     })
   })
   
@@ -627,6 +631,8 @@ describe('NirnVault', () => {
         .withArgs(adapter1.address, vault.address, getBigNumber(4).add(newReserves))
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, FIVE_E18)
+        .to.emit(vault, 'Withdrawal')
+        .withArgs(FIVE_E18, FIVE_E18)
       expect(await vault.balanceOf(wallet.address)).to.eq(FIVE_E18)
     })
 
@@ -644,6 +650,8 @@ describe('NirnVault', () => {
         .withArgs(adapter2.address, vault.address, getBigNumber(5, 17).add(newReserves))
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, getBigNumber(6))
+        .to.emit(vault, 'Withdrawal')
+        .withArgs(getBigNumber(6), getBigNumber(6))
       expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(4))
     })
 
@@ -663,6 +671,8 @@ describe('NirnVault', () => {
         .withArgs(fees, sharesForFees)
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, underlyingWithdrawn)
+        .to.emit(vault, 'Withdrawal')
+        .withArgs(FIVE_E18, underlyingWithdrawn)
       expect(
         await vault.priceAtLastFee()
       ).to.eq(
@@ -708,6 +718,8 @@ describe('NirnVault', () => {
         .withArgs(adapter1.address, vault.address, getBigNumber(4).add(newReserves))
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, FIVE_E18)
+        .to.emit(vault, 'Withdrawal')
+        .withArgs(FIVE_E18, FIVE_E18)
       expect(await vault.balanceOf(wallet.address)).to.eq(FIVE_E18)
     })
 
@@ -725,6 +737,8 @@ describe('NirnVault', () => {
         .withArgs(adapter2.address, vault.address, getBigNumber(5, 17).add(newReserves))
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, getBigNumber(6))
+        .to.emit(vault, 'Withdrawal')
+        .withArgs(getBigNumber(6), getBigNumber(6))
       expect(await vault.balanceOf(wallet.address)).to.eq(getBigNumber(4))
     })
 
@@ -748,6 +762,8 @@ describe('NirnVault', () => {
         .withArgs(fees, sharesForFees)
         .to.emit(underlying, 'Transfer')
         .withArgs(vault.address, wallet.address, amount)
+        .to.emit(vault, 'Withdrawal')
+        .withArgs(sharesBurned, amount)
       expect(
         await vault.priceAtLastFee()
       ).to.eq(

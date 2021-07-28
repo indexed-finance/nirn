@@ -133,6 +133,7 @@ contract NirnVault is NirnVaultBase {
     uint256 supply = claimFees(bal, totalSupply);
     shares = supply == 0 ? amount : amount.mul(supply) / bal;
     _mint(to, shares);
+    emit Deposit(shares, amount);
   }
 
   function withdraw(uint256 shares) external override returns (uint256 amountOut) {
@@ -171,6 +172,7 @@ contract NirnVault is NirnVaultBase {
     BalanceSheet memory balanceSheet
   ) internal {
     _burn(msg.sender, shares);
+    emit Withdrawal(shares, amountOut);
     uint256 newReserves = balanceSheet.totalBalance.sub(amountOut).mulFractionE18(reserveRatio);
     withdrawToMatchAmount(
       adapters,

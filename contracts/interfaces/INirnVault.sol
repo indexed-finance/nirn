@@ -36,6 +36,12 @@ interface INirnVault {
   /** @dev Emitted when rewards seller contract is set. */
   event SetRewardsSeller(address rewardsSeller);
 
+  /** @dev Emitted when a deposit is made. */
+  event Deposit(uint256 shares, uint256 underlying);
+
+  /** @dev Emitted when a deposit is made. */
+  event Withdrawal(uint256 shares, uint256 underlying);
+
 /* ========== Initializer ========== */
 
   function initialize(
