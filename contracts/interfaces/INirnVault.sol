@@ -47,7 +47,8 @@ interface INirnVault {
   function initialize(
     address _underlying,
     address _rewardsSeller,
-    address _feeRecipient
+    address _feeRecipient,
+    address _owner
   ) external;
 
 /* ========== Config Queries ========== */
