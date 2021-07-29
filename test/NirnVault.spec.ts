@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { BigNumber, constants, ContractTransaction } from "ethers";
 import { waffle } from "hardhat";
 import { AdapterRegistry, TestAdapter, TestNirnVault, TestERC20, TestVault, CallForwarder, TestRewardsSeller } from "../typechain"
-import { createBalanceCheckpoint, createSnapshot, deployContract, getBigNumber } from "./shared";
+import { createBalanceCheckpoint, createSnapshot, deployClone, deployContract, getBigNumber } from "./shared";
 import { deployTestAdaptersAndRegistry, deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
 
 const diff = (expected: BigNumber, actual: BigNumber) => expected.sub(actual).abs();
@@ -24,6 +24,7 @@ describe('NirnVault', () => {
   let wrapper2: TestVault
   let wrapper3: TestVault
   let restoreSnapshot: () => Promise<void>;
+  let implementation:  TestNirnVault;
 
   const deposit = async (amount: BigNumber) => {
     await underlying.mint(wallet.address, amount)
@@ -41,8 +42,9 @@ describe('NirnVault', () => {
       wrapper3,
       registry
     } = await deployTestAdaptersAndRegistry())
-    vault = await deployContract('TestNirnVault', registry.address, constants.AddressZero)
-    await vault.initialize(underlying.address, constants.AddressZero, feeRecipient.address)
+    implementation = await deployContract('TestNirnVault', registry.address, constants.AddressZero)
+    vault = await deployClone(implementation)
+    await vault.initialize(underlying.address, constants.AddressZero, feeRecipient.address, wallet.address)
     await underlying.approve(vault.address, constants.MaxUint256)
     restoreSnapshot = await createSnapshot()
   })
@@ -61,6 +63,10 @@ describe('NirnVault', () => {
 
   describe('Constructor & Initializer', () => {
     setupTests()
+
+    it('Should set owner of implementation to address 1', async () => {
+      expect(await implementation.owner()).to.eq(`0x0000000000000000000000000000000000000001`)
+    })
 
     it('Should not allow second initialization', async () => {
       await expect(
@@ -100,6 +106,10 @@ describe('NirnVault', () => {
 
     it('Should set symbol to n{underlying.symbol()}', async () => {
       expect(await vault.symbol()).to.eq('nTOK')
+    })
+
+    it('Should set owner to initialize caller', async () => {
+      expect(await vault.owner()).to.eq(wallet.address)
     })
   })
 
@@ -381,7 +391,7 @@ describe('NirnVault', () => {
       it('Should revert if caller is not owner', async () => {
         await expect(
           vault.connect(wallet1).setMaximumUnderlying(0)
-        ).to.be.revertedWith('Ownable: caller is not the owner')
+        ).to.be.revertedWith('!owner')
       })
 
       it('Should let owner set maximum underlying', async () => {
@@ -400,7 +410,7 @@ describe('NirnVault', () => {
       it('Should revert if caller is not owner', async () => {
         await expect(
           vault.connect(wallet1).setPerformanceFee(0)
-        ).to.be.revertedWith('Ownable: caller is not the owner')
+        ).to.be.revertedWith('!owner')
       })
 
       it('Should revert if performance fee > 20%', async () => {
@@ -438,7 +448,7 @@ describe('NirnVault', () => {
       it('Should revert if caller is not owner', async () => {
         await expect(
           vault.connect(wallet1).setReserveRatio(0)
-        ).to.be.revertedWith('Ownable: caller is not the owner')
+        ).to.be.revertedWith('!owner')
       })
 
       it('Should revert if reserve ratio > 20%', async () => {
@@ -463,7 +473,7 @@ describe('NirnVault', () => {
       it('Should revert if caller is not owner', async () => {
         await expect(
           vault.connect(wallet1).setFeeRecipient(constants.AddressZero)
-        ).to.be.revertedWith('Ownable: caller is not the owner')
+        ).to.be.revertedWith('!owner')
       })
 
       it('Should let owner set fee recipient', async () => {
@@ -482,7 +492,7 @@ describe('NirnVault', () => {
       it('Should revert if caller is not owner', async () => {
         await expect(
           vault.connect(wallet1).setRewardsSeller(constants.AddressZero)
-        ).to.be.revertedWith('Ownable: caller is not the owner')
+        ).to.be.revertedWith('!owner')
       })
 
       it('Should let owner set rewards seller', async () => {
