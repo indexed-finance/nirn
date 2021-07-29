@@ -16,7 +16,7 @@ export function deployTestERC20(name: string = 'Test Token', symbol: string = 'T
   return deployContract('TestERC20', name, symbol, initBalance);
 }
 
-export async function deployTestAdaptersAndRegistry(name: string = 'Test Token', symbol: string = 'TOK', initBalance: BigNumber = getBigNumber(150)) {
+export async function deployTestAdaptersAndRegistry(name: string = 'Test Token', symbol: string = 'TOK', initBalance: BigNumber = getBigNumber(150), approveAdapters = true) {
   const [,,protocolAdapter] = waffle.provider.getWallets()
   const underlying: TestERC20 = await deployContract('TestERC20', name, symbol, initBalance);
   const { adapter: adapter1, wrapper: wrapper1 } = await deployTestWrapperAndAdapter(underlying.address, getBigNumber(1, 17))
@@ -30,7 +30,9 @@ export async function deployTestAdaptersAndRegistry(name: string = 'Test Token',
   await adapter3.deposit(initBalance.div(3))
   const registry: AdapterRegistry = await deployContract('AdapterRegistry')
   await registry.addProtocolAdapter(protocolAdapter.address)
-  await registry.connect(protocolAdapter).addTokenAdapters([ adapter1.address, adapter2.address, adapter3.address ])
+  if (approveAdapters) {
+    await registry.connect(protocolAdapter).addTokenAdapters([ adapter1.address, adapter2.address, adapter3.address ])
+  }
   return {
     underlying,
     adapter1,
