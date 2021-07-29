@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "../OwnableProxyImplementation.sol";
 import "../interfaces/IAdapterRegistry.sol";
 import "../interfaces/IRewardsSeller.sol";
 import "../interfaces/INirnVault.sol";
@@ -16,7 +16,7 @@ import "./ERC20.sol";
  * @dev Base contract defining the constant and storage variables
  * for NirnVault, as well as basic state queries and setters.
  */
-abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
+abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVault {
   using SafeCast for uint256;
   using TransferHelper for address;
   using Fraction for uint256;
@@ -73,13 +73,13 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   uint256 public override maximumUnderlying;
 
   /** @dev Fee taken on profit as a fraction of 1e18. */
-  uint64 public override performanceFee = 5e16;
+  uint64 public override performanceFee;
 
   /** @dev Ratio of underlying token to keep in the vault for cheap withdrawals as a fraction of 1e18. */
-  uint64 public override reserveRatio = 1e17;
+  uint64 public override reserveRatio;
 
   /** @dev Last price at which fees were taken. */
-  uint128 public override priceAtLastFee = 1e18;
+  uint128 public override priceAtLastFee;
 
   /** @dev Tightly packed token adapters encoded as (address,uint96). */
   bytes32[] internal packedAdaptersAndWeights;
@@ -135,9 +135,9 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   function initialize(
     address _underlying,
     address _rewardsSeller,
-    address _feeRecipient
-  ) external override {
-    require(underlying == address(0), "already initialized");
+    address _feeRecipient,
+    address _owner
+  ) external override initializer(_owner) {
     underlying = _underlying;
     feeRecipient = _feeRecipient;
     rewardsSeller = IRewardsSeller(_rewardsSeller);
@@ -148,6 +148,9 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
 
     name = SymbolHelper.getPrefixedName("Indexed ", _underlying);
     symbol = SymbolHelper.getPrefixedSymbol("n", _underlying);
+    performanceFee = 5e16;
+    reserveRatio = 1e17;
+    priceAtLastFee = 1e18;
   }
 
 /* ========== Configuration Controls ========== */
