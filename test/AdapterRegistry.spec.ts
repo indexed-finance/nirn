@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import { BigNumber, constants, ContractTransaction, Wallet } from "ethers";
 import { waffle } from "hardhat";
-import { AdapterRegistry, TestAdapter, TestERC20, TestVault } from "../typechain"
-import { createSnapshot, deployContract, getBigNumber } from "./shared";
+import { AdapterRegistry, TestAdapter, TestERC20, TestNirnVault, TestVault } from "../typechain"
+import { createSnapshot, deployClone, deployContract, getBigNumber } from "./shared";
 import { deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
 
 const ADDRESS_ONE = `0x${'11'.repeat(20)}`;
@@ -10,7 +10,7 @@ const ADDRESS_TWO = `0x${'22'.repeat(20)}`;
 const ADDRESS_THREE = `0x${'33'.repeat(20)}`;
 
 describe('AdapterRegistry', () => {
-  const [owner, notOwner, approvedProtocol] = waffle.provider.getWallets()
+  const [owner, notOwner, approvedProtocol, approvedFactory] = waffle.provider.getWallets()
 
   let registry: AdapterRegistry
   let adapter: TestAdapter
@@ -102,6 +102,127 @@ describe('AdapterRegistry', () => {
 
     it('Should remove record from protocolAdapters', async () => {
       expect(await registry.protocolAdapters(1)).to.eq(constants.AddressZero)
+    })
+  })
+
+  describe('addVaultFactory()', () => {
+    beforeEach(() => restoreSnapshot())
+
+    it('Should revert if caller is not owner', async () => {
+      await expect(registry.connect(notOwner).addVaultFactory(constants.AddressZero))
+        .to.be.revertedWith('Ownable: caller is not the owner')
+    })
+
+    it('Should revert if address is null', async () => {
+      await expect(registry.addVaultFactory(constants.AddressZero))
+        .to.be.revertedWith('null address')
+    })
+
+    it('Should add vault to approvedVaultFactories', async () => {
+      await expect(registry.addVaultFactory(approvedFactory.address))
+        .to.emit(registry, 'VaultFactoryAdded')
+        .withArgs(approvedFactory.address)
+      expect(await registry.approvedVaultFactories(approvedFactory.address)).to.be.true
+    })
+
+    it('Should revert if already approved', async () => {
+      await registry.addVaultFactory(approvedFactory.address)
+      await expect(registry.addVaultFactory(approvedFactory.address))
+        .to.be.revertedWith('already approved')
+    })
+  })
+
+  describe('removeVaultFactory()', () => {
+    beforeEach(() => restoreSnapshot())
+
+    it('Should revert if caller is not owner', async () => {
+      await expect(registry.connect(notOwner).removeVaultFactory(constants.AddressZero))
+        .to.be.revertedWith('Ownable: caller is not the owner')
+    })
+
+    it('Should revert if factory not approved', async () => {
+      await expect(registry.removeVaultFactory(approvedFactory.address))
+        .to.be.revertedWith('!approved')
+    })
+
+    it('Should remove vault from approvedVaultFactories', async () => {
+      await registry.addVaultFactory(approvedFactory.address)
+      await expect(registry.removeVaultFactory(approvedFactory.address))
+        .to.emit(registry, 'VaultFactoryRemoved')
+        .withArgs(approvedFactory.address)
+      expect(await registry.approvedVaultFactories(approvedFactory.address)).to.be.false
+    })
+  })
+
+  const deployVault = async (addAdapter = true) => {
+    if (addAdapter) {
+      await registry.addProtocolAdapter(approvedProtocol.address)
+      await registry.connect(approvedProtocol).addTokenAdapter(adapter1.address)
+    }
+    const implementation = await deployContract<TestNirnVault>('TestNirnVault', registry.address, constants.AddressZero)
+    const vault = await deployClone(implementation)
+    await vault.initialize(underlying.address, constants.AddressZero, constants.AddressZero, owner.address)
+    return vault
+  }
+
+  describe('addVault()', () => {
+    beforeEach(() => restoreSnapshot())
+
+    it('Should revert if not approved factory', async () => {
+      await expect(registry.addVault(constants.AddressZero))
+        .to.be.revertedWith('!approved')
+    })
+
+    it('Should revert if vault does not expose underlying() fn', async () => {
+      await registry.addVaultFactory(approvedFactory.address)
+      await expect(registry.connect(approvedFactory).addVault(constants.AddressZero)).to.be.reverted
+    })
+
+    it('Should add vault and map it to the underlying asset', async () => {
+      await registry.addVaultFactory(approvedFactory.address)
+      const vault = await deployVault()
+      await expect(
+        registry.connect(approvedFactory).addVault(vault.address)
+      )
+        .to.emit(registry, 'VaultAdded')
+        .withArgs(underlying.address, vault.address)
+      expect(await registry.vaultsByUnderlying(underlying.address)).to.eq(vault.address)
+    })
+
+    it('Should revert if vault already exists for underlying', async () => {
+      await registry.addVaultFactory(approvedFactory.address)
+      const vault1 = await deployVault()
+      const vault2 = await deployVault(false)
+      await registry.connect(approvedFactory).addVault(vault1.address)
+      await expect(
+        registry.connect(approvedFactory).addVault(vault2.address)
+      ).to.be.revertedWith('exists')
+    })
+  })
+
+  describe('removeVault()', () => {
+    beforeEach(() => restoreSnapshot())
+
+    it('Should revert if caller is not the owner', async () => {
+      await expect(registry.connect(notOwner).removeVault(constants.AddressZero))
+        .to.be.revertedWith('Ownable: caller is not the owner')
+    })
+
+    it('Should revert if vault not mapped to underlying', async () => {
+      const vault = await deployVault()
+      await expect(
+        registry.removeVault(vault.address)
+      ).to.be.revertedWith('!exists')
+    })
+
+    it('Should remove mapping from underlying to vault', async () => {
+      await registry.addVaultFactory(approvedFactory.address)
+      const vault = await deployVault()
+      await registry.connect(approvedFactory).addVault(vault.address)
+      expect(await registry.removeVault(vault.address))
+        .to.emit(registry, 'VaultRemoved')
+        .withArgs(underlying.address, vault.address)
+      expect(await registry.vaultsByUnderlying(underlying.address)).to.eq(constants.AddressZero)
     })
   })
 

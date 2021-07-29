@@ -5,9 +5,10 @@ pragma solidity =0.7.6;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "./interfaces/ITokenAdapter.sol";
+import "./interfaces/IProtocolAdapter.sol";
+import "./interfaces/INirnVault.sol";
 import "./libraries/ArrayHelper.sol";
 import "./libraries/DynamicArrays.sol";
-import "./interfaces/IProtocolAdapter.sol";
 
 
 contract AdapterRegistry is Ownable() {
@@ -31,6 +32,14 @@ contract AdapterRegistry is Ownable() {
 
   event TokenSupportRemoved(address underlying);
 
+  event VaultFactoryAdded(address factory);
+
+  event VaultFactoryRemoved(address factory);
+
+  event VaultAdded(address underlying, address vault);
+
+  event VaultRemoved(address underlying, address vault);
+
 /* ========== Structs ========== */
 
   struct TokenAdapter {
@@ -39,14 +48,32 @@ contract AdapterRegistry is Ownable() {
   }
 
 /* ========== Storage ========== */
+
+  /** @dev Mapping from underlying token to registered vault. */
+  mapping(address => address) public vaultsByUnderlying;
+
+  /** @dev Accounts allowed to register vaults. */
+  mapping(address => bool) public approvedVaultFactories;
+
+  /** @dev List of all registered vaults. */
+  EnumerableSet.AddressSet internal vaults;
+
+  /** @dev Number of protocol adapters registered. */
   uint256 public protocolsCount;
+
+  /** @dev Mapping from protocol IDs to adapter addresses. */
   mapping(uint256 => address) public protocolAdapters;
+
+  /** @dev Mapping from protocol adapter addresses to protocol IDs. */
   mapping(address => uint256) public protocolAdapterIds;
-  // All adapters for a given underlying token
+
+  /** @dev Mapping from underlying tokens to lists of adapters. */
   mapping(address => address[]) internal tokenAdapters;
-  // Adapters by wrapper
+
+  /** @dev Mapping from wrapper tokens to adapters. */
   mapping(address => TokenAdapter) internal adaptersByWrapperToken;
-  // All supported underlying tokens
+
+  /** @dev List of all underlying tokens with registered adapters. */
   EnumerableSet.AddressSet internal supportedTokens;
 
 /* ========== Modifiers ========== */
@@ -58,6 +85,40 @@ contract AdapterRegistry is Ownable() {
 
   function getProtocolAdapterId(address protocolAdapter) internal view returns (uint256 id) {
     require((id = protocolAdapterIds[protocolAdapter]) > 0, "!exists");
+  }
+
+/* ========== Vault Factory Management ========== */
+
+  function addVaultFactory(address _factory) external onlyOwner {
+    require(_factory != address(0), "null address");
+    require(!approvedVaultFactories[_factory], "already approved");
+    approvedVaultFactories[_factory] = true;
+    emit VaultFactoryAdded(_factory);
+  }
+
+  function removeVaultFactory(address _factory) external onlyOwner {
+    require(approvedVaultFactories[_factory], "!approved");
+    approvedVaultFactories[_factory] = false;
+    emit VaultFactoryRemoved(_factory);
+  }
+
+/* ========== Vault Management ========== */
+
+  function addVault(address vault) external {
+    require(approvedVaultFactories[msg.sender], "!approved");
+    address underlying = INirnVault(vault).underlying();
+    require(vaultsByUnderlying[underlying] == address(0), "exists");
+    vaultsByUnderlying[underlying] = vault;
+    vaults.add(vault);
+    emit VaultAdded(underlying, vault);
+  }
+
+  function removeVault(address vault) external onlyOwner {
+    address underlying = INirnVault(vault).underlying();
+    require(vaultsByUnderlying[underlying] != address(0), "!exists");
+    vaultsByUnderlying[underlying] = address(0);
+    vaults.remove(vault);
+    emit VaultRemoved(underlying, vault);
   }
 
 /* ========== Protocol Adapter Management ========== */
@@ -127,6 +188,16 @@ contract AdapterRegistry is Ownable() {
       emit TokenSupportRemoved(underlying);
     }
     emit TokenAdapterRemoved(address(adapter), protocolId, underlying, wrapper);
+  }
+
+/* ========== Vault Queries ========== */
+
+  function getVaultsList() external view returns (address[] memory) {
+    return vaults.toArray();
+  }
+
+  function haveVault(address underlying) external view returns (bool) {
+    return vaults.contains(underlying);
   }
 
 /* ========== Protocol Queries ========== */
