@@ -148,7 +148,7 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
 
     name = SymbolHelper.getPrefixedName("Indexed ", _underlying);
     symbol = SymbolHelper.getPrefixedSymbol("n", _underlying);
-    performanceFee = 5e16;
+    performanceFee = 1e17;
     reserveRatio = 1e17;
     priceAtLastFee = 1e18;
   }
