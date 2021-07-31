@@ -1,11 +1,10 @@
-# Project Codename Nirn, aka Indexed Interest, aka Name TBD
+# Nirn/Indexed Earn: A Permissionless, Compositional Yield Aggregator
 
 Nirn is a permissionless yield aggregator that optimizes interest rates for lenders across several lending protocols. The central idea is to allocate capital among multiple lending protocols in whatever ratios result in the greatest net interest rate.
 
 Conceptually, Nirn is similar to Yearn's [iTokens](https://github.com/yearn/itoken), Rari's [yield pools](https://github.com/Rari-Capital/rari-yield-pool-contracts) and [Idle Finance](https://github.com/Idle-Labs/idle-contracts); however, it has a number of key distinctions:
 
 Each Nirn vault can split its capital among several lending markets, and does not use permissioned rebalancer accounts to determine how it is split. Instead, optimal allocations can be calculated off-chain by anyone and suggested to the vault contract, which then verifies that the suggested rebalance would increase the vault's net interest rate. This both prevents any reliance on the developers of Indexed and ensures that if a better allocation of capital is possible, anyone can make the vault use it.
-
 
 # Testing
 
@@ -65,8 +64,10 @@ Currently supports:
 - Compound
 - Cream
 - Iron Bank
-- DyDx
 - Fulcrum (bzx)
+
+Upcoming support:
+- DyDx
 - Rari Fuse
 
 ### Token Adapters
