@@ -70,7 +70,7 @@ describe('NirnVault', () => {
 
     it('Should not allow second initialization', async () => {
       await expect(
-        vault.initialize(underlying.address, constants.AddressZero, feeRecipient.address)
+        vault.initialize(underlying.address, constants.AddressZero, feeRecipient.address, wallet.address)
       ).to.be.revertedWith('already initialized')
     })
 
