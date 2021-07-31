@@ -10,12 +10,12 @@ import {
   AaveV2ProtocolAdapter,
   CompoundProtocolAdapter,
   CreamProtocolAdapter,
-  FuseTokenAdapterFactory,
+  //FuseTokenAdapterFactory,
   DyDxProtocolAdapter,
   FulcrumProtocolAdapter,
   FuseProtocolAdapter,
   IFusePoolDirectory,
-  FusePoolAdapter,
+  //FusePoolAdapter,
   IErc20Adapter,
   IERC20,
   IronBankProtocolAdapter,
@@ -32,7 +32,7 @@ describe('Deploy All', () => {
   let aaveV2: AaveV2ProtocolAdapter
   let compound: CompoundProtocolAdapter
   let cream: CreamProtocolAdapter
-  let fTokenFactory: FuseTokenAdapterFactory
+  //let fTokenFactory: FuseTokenAdapterFactory
   let dydx: DyDxProtocolAdapter
   let fulcrum: FulcrumProtocolAdapter
   let fuse: FuseProtocolAdapter
@@ -45,12 +45,12 @@ describe('Deploy All', () => {
     registry = await deployContract('AdapterRegistry')
     aaveV1 = await deployContract('AaveV1ProtocolAdapter', registry.address)
     aaveV2 = await deployContract('AaveV2ProtocolAdapter', registry.address)
-    fTokenFactory = await deployContract('FuseTokenAdapterFactory')
+    //fTokenFactory = await deployContract('FuseTokenAdapterFactory')
     compound = await deployContract('CompoundProtocolAdapter', registry.address/* , cTokenFactory.address */)
     cream = await deployContract('CreamProtocolAdapter', registry.address/* , cTokenFactory.address */)
     iron = await deployContract('IronBankProtocolAdapter', registry.address/* , cTokenFactory.address */)
-    fuse = await deployContract('FuseProtocolAdapter', registry.address, fTokenFactory.address)
-    await fuse.deployTransaction.wait()
+    //fuse = await deployContract('FuseProtocolAdapter', registry.address, fTokenFactory.address)
+    //await fuse.deployTransaction.wait()
     const nonce = await wallet.getTransactionCount()
     const nextAddress = getContractAddress({ from: wallet.address, nonce: nonce + 1 })
     const nextAddress2 = getContractAddress({ from: wallet.address, nonce: nonce + 3 })
@@ -65,7 +65,7 @@ describe('Deploy All', () => {
       aaveV2,
       compound,
       cream,
-      fuse,
+      //fuse,
       dydx,
       fulcrum,
       iron
@@ -78,7 +78,7 @@ describe('Deploy All', () => {
       await registry.addProtocolAdapter(aaveV2.address),
       await registry.addProtocolAdapter(compound.address),
       await registry.addProtocolAdapter(cream.address),
-      await registry.addProtocolAdapter(fuse.address),
+      // await registry.addProtocolAdapter(fuse.address),
       await registry.addProtocolAdapter(iron.address)
     ].map(tx => tx.hash);
 
@@ -160,6 +160,7 @@ describe('Deploy All', () => {
     console.log(`FULCRUM: Mapped ${numTokens} | Avg Cost:`, (gasUsed / numTokens))
   })
 
+  /** 
   let fuseStartId: number;
 
   it('Fuse: Map Pools', async () => {
@@ -192,6 +193,8 @@ describe('Deploy All', () => {
       console.log(`${name}: Mapped ${numPools} | Avg Cost:`, (gasUsed / numPools))
     }
   })
+  **/
+
   const diff = (a: BigNumber, b: BigNumber) => a.gt(b) ? a.sub(b) : b.sub(a);
 
   async function testAdapterHypotheticalAPR(token: string, adapterAddress: string, debug = false) {
