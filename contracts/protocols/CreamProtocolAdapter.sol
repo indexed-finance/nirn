@@ -82,7 +82,10 @@ contract CreamProtocolAdapter is AbstractProtocolAdapter {
     bool isFrozen = comptroller.mintGuardianPaused(cToken);
     if (isFrozen) return true;
     // Return true if market is for an SLP token, which the adapter can not handle.
-    try ICToken(cToken).sushi() returns (address) {
+    // The call to `sushi()` will use all the gas sent if it fails, so we specify a
+    // maximum of 25k gas to ensure it will not use all the gas in the transaction, but
+    // can still be executed with any foreseeable changes to the gas schedule.
+    try ICToken(cToken).sushi{gas:25000}() returns (address) {
       return true;
     } catch {
       // Return true is supply is 0.
