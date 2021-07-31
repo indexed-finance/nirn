@@ -196,8 +196,8 @@ contract AdapterRegistry is Ownable() {
     return vaults.toArray();
   }
 
-  function haveVault(address underlying) external view returns (bool) {
-    return vaults.contains(underlying);
+  function haveVaultFor(address underlying) external view returns (bool) {
+    return vaultsByUnderlying[underlying] != address(0);
   }
 
 /* ========== Protocol Queries ========== */

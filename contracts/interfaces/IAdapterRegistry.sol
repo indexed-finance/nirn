@@ -70,7 +70,7 @@ interface IAdapterRegistry {
 
   function getVaultsList() external view returns (address[] memory);
 
-  function haveVault(address underlying) external view returns (bool);
+  function haveVaultFor(address underlying) external view returns (bool);
 
 /* ========== Protocol Queries ========== */
 
