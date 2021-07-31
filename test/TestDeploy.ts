@@ -21,7 +21,8 @@ import {
   IronBankProtocolAdapter,
   IIndexPool
 } from "../typechain"
-import { deployContract, deploy, getTokenSymbol, sendEtherTo, getContract, sendTokenTo, WETH, getIERC20 } from "./shared/utils"
+import { deployContract, deploy, getContract } from "./shared/utils"
+import { WETH, getIERC20, getTokenSymbol, sendEtherTo, sendTokenTo } from "./shared/tokens"
 
 
 describe('Deploy All', () => {
