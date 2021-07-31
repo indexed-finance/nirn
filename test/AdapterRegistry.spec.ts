@@ -197,6 +197,8 @@ describe('AdapterRegistry', () => {
       await expect(
         registry.connect(approvedFactory).addVault(vault2.address)
       ).to.be.revertedWith('exists')
+      expect(await registry.getVaultsList()).to.deep.eq([vault1.address])
+      expect(await registry.haveVaultFor(underlying.address)).to.be.true
     })
   })
 
@@ -223,6 +225,8 @@ describe('AdapterRegistry', () => {
         .to.emit(registry, 'VaultRemoved')
         .withArgs(underlying.address, vault.address)
       expect(await registry.vaultsByUnderlying(underlying.address)).to.eq(constants.AddressZero)
+      expect(await registry.getVaultsList()).to.deep.eq([])
+      expect(await registry.haveVaultFor(underlying.address)).to.be.false
     })
   })
 
