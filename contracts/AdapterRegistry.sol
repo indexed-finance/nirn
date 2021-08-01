@@ -6,66 +6,38 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "./interfaces/ITokenAdapter.sol";
 import "./interfaces/IProtocolAdapter.sol";
+import "./interfaces/IAdapterRegistry.sol";
 import "./interfaces/INirnVault.sol";
 import "./libraries/ArrayHelper.sol";
 import "./libraries/DynamicArrays.sol";
 
 
-contract AdapterRegistry is Ownable() {
+contract AdapterRegistry is Ownable(), IAdapterRegistry {
   using ArrayHelper for address[];
   using ArrayHelper for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.AddressSet;
   using DynamicArrays for address[];
   using DynamicArrays for uint256[];
 
-/* ========== Events ========== */
-
-  event ProtocolAdapterAdded(uint256 protocolId, address protocolAdapter);
-
-  event ProtocolAdapterRemoved(uint256 protocolId);
-
-  event TokenAdapterAdded(address adapter, uint256 protocolId, address underlying, address wrapper);
-
-  event TokenAdapterRemoved(address adapter, uint256 protocolId, address underlying, address wrapper);
-
-  event TokenSupportAdded(address underlying);
-
-  event TokenSupportRemoved(address underlying);
-
-  event VaultFactoryAdded(address factory);
-
-  event VaultFactoryRemoved(address factory);
-
-  event VaultAdded(address underlying, address vault);
-
-  event VaultRemoved(address underlying, address vault);
-
-/* ========== Structs ========== */
-
-  struct TokenAdapter {
-    address adapter;
-    uint96 protocolId;
-  }
-
 /* ========== Storage ========== */
 
   /** @dev Mapping from underlying token to registered vault. */
-  mapping(address => address) public vaultsByUnderlying;
+  mapping(address => address) public override vaultsByUnderlying;
 
   /** @dev Accounts allowed to register vaults. */
-  mapping(address => bool) public approvedVaultFactories;
+  mapping(address => bool) public override approvedVaultFactories;
 
   /** @dev List of all registered vaults. */
   EnumerableSet.AddressSet internal vaults;
 
   /** @dev Number of protocol adapters registered. */
-  uint256 public protocolsCount;
+  uint256 public override protocolsCount;
 
   /** @dev Mapping from protocol IDs to adapter addresses. */
-  mapping(uint256 => address) public protocolAdapters;
+  mapping(uint256 => address) public override protocolAdapters;
 
   /** @dev Mapping from protocol adapter addresses to protocol IDs. */
-  mapping(address => uint256) public protocolAdapterIds;
+  mapping(address => uint256) public override protocolAdapterIds;
 
   /** @dev Mapping from underlying tokens to lists of adapters. */
   mapping(address => address[]) internal tokenAdapters;
@@ -89,14 +61,14 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Vault Factory Management ========== */
 
-  function addVaultFactory(address _factory) external onlyOwner {
+  function addVaultFactory(address _factory) external override onlyOwner {
     require(_factory != address(0), "null address");
     require(!approvedVaultFactories[_factory], "already approved");
     approvedVaultFactories[_factory] = true;
     emit VaultFactoryAdded(_factory);
   }
 
-  function removeVaultFactory(address _factory) external onlyOwner {
+  function removeVaultFactory(address _factory) external override onlyOwner {
     require(approvedVaultFactories[_factory], "!approved");
     approvedVaultFactories[_factory] = false;
     emit VaultFactoryRemoved(_factory);
@@ -104,7 +76,7 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Vault Management ========== */
 
-  function addVault(address vault) external {
+  function addVault(address vault) external override {
     require(approvedVaultFactories[msg.sender], "!approved");
     address underlying = INirnVault(vault).underlying();
     require(vaultsByUnderlying[underlying] == address(0), "exists");
@@ -113,7 +85,7 @@ contract AdapterRegistry is Ownable() {
     emit VaultAdded(underlying, vault);
   }
 
-  function removeVault(address vault) external onlyOwner {
+  function removeVault(address vault) external override onlyOwner {
     address underlying = INirnVault(vault).underlying();
     require(vaultsByUnderlying[underlying] != address(0), "!exists");
     vaultsByUnderlying[underlying] = address(0);
@@ -123,7 +95,7 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Protocol Adapter Management ========== */
 
-  function addProtocolAdapter(address protocolAdapter) external onlyProtocolOrOwner returns (uint256 id) {
+  function addProtocolAdapter(address protocolAdapter) external override onlyProtocolOrOwner returns (uint256 id) {
     require(protocolAdapter != address(0), "null");
     require(protocolAdapterIds[protocolAdapter] == 0, "exists");
     id = ++protocolsCount;
@@ -132,7 +104,7 @@ contract AdapterRegistry is Ownable() {
     emit ProtocolAdapterAdded(id, protocolAdapter);
   }
 
-  function removeProtocolAdapter(address protocolAdapter) external onlyOwner {
+  function removeProtocolAdapter(address protocolAdapter) external override onlyOwner {
     uint256 id = getProtocolAdapterId(protocolAdapter);
     delete protocolAdapterIds[protocolAdapter];
     delete protocolAdapters[id];
@@ -154,22 +126,22 @@ contract AdapterRegistry is Ownable() {
     emit TokenAdapterAdded(address(adapter), id, underlying, wrapper);
   }
 
-  function addTokenAdapter(IErc20Adapter adapter) external {
+  function addTokenAdapter(address adapter) external override {
     uint256 id = getProtocolAdapterId(msg.sender);
-    _addTokenAdapter(adapter, id);
+    _addTokenAdapter(IErc20Adapter(adapter), id);
   }
 
-  function addTokenAdapters(IErc20Adapter[] calldata adapters) external {
+  function addTokenAdapters(address[] calldata adapters) external override {
     uint256 id = getProtocolAdapterId(msg.sender);
     uint256 len = adapters.length;
     for (uint256 i = 0; i < len; i++) {
-      IErc20Adapter adapter = adapters[i];
+      IErc20Adapter adapter = IErc20Adapter(adapters[i]);
       _addTokenAdapter(adapter, id);
     }
   }
 
-  function removeTokenAdapter(IErc20Adapter adapter) external {
-    address wrapper = adapter.token();
+  function removeTokenAdapter(address adapter) external override {
+    address wrapper = IErc20Adapter(adapter).token();
     TokenAdapter memory adapterRecord = adaptersByWrapperToken[wrapper];
     require(adapterRecord.adapter == address(adapter), "wrong adapter");
     uint256 protocolId = adapterRecord.protocolId;
@@ -179,7 +151,7 @@ contract AdapterRegistry is Ownable() {
       "!authorized"
     );
     delete adaptersByWrapperToken[wrapper];
-    address underlying = adapter.underlying();
+    address underlying = IErc20Adapter(adapter).underlying();
     address[] storage adapters = tokenAdapters[underlying];
     uint256 index = adapters.indexOf(address(adapter));
     adapters.remove(index);
@@ -192,17 +164,17 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Vault Queries ========== */
 
-  function getVaultsList() external view returns (address[] memory) {
+  function getVaultsList() external view override returns (address[] memory) {
     return vaults.toArray();
   }
 
-  function haveVaultFor(address underlying) external view returns (bool) {
+  function haveVaultFor(address underlying) external view override returns (bool) {
     return vaultsByUnderlying[underlying] != address(0);
   }
 
 /* ========== Protocol Queries ========== */
 
-  function getProtocolAdaptersAndIds() external view returns (address[] memory adapters, uint256[] memory ids) {
+  function getProtocolAdaptersAndIds() external view override returns (address[] memory adapters, uint256[] memory ids) {
     uint256 len = protocolsCount;
     adapters = DynamicArrays.dynamicAddressArray(len);
     ids = DynamicArrays.dynamicUint256Array(len);
@@ -215,13 +187,13 @@ contract AdapterRegistry is Ownable() {
     }
   }
 
-  function getProtocolMetadata(uint256 id) external view returns (address protocolAdapter, string memory name) {
+  function getProtocolMetadata(uint256 id) external view override returns (address protocolAdapter, string memory name) {
     protocolAdapter = protocolAdapters[id];
     require(protocolAdapter != address(0), "invalid id");
     name = IProtocolAdapter(protocolAdapter).protocol();
   }
 
-  function getProtocolForTokenAdapter(address adapter) external view returns (address protocolAdapter) {
+  function getProtocolForTokenAdapter(address adapter) external view override returns (address protocolAdapter) {
     address wrapper = IErc20Adapter(adapter).token();
     TokenAdapter memory adapterRecord = adaptersByWrapperToken[wrapper];
     require(adapterRecord.adapter == adapter, "!approved");
@@ -230,37 +202,38 @@ contract AdapterRegistry is Ownable() {
 
 /* ========== Supported Token Queries ========== */
 
-  function isSupported(address underlying) external view returns (bool) {
+  function isSupported(address underlying) external view override returns (bool) {
     return tokenAdapters[underlying].length > 0;
   }
 
-  function getSupportedTokens() external view returns (address[] memory list) {
+  function getSupportedTokens() external view override returns (address[] memory list) {
     list = supportedTokens.toArray();
   }
 
 /* ========== Token Adapter Queries ========== */
 
-  function isApprovedAdapter(address adapter) external view returns (bool) {
+  function isApprovedAdapter(address adapter) external view override returns (bool) {
     address wrapper = IErc20Adapter(adapter).token();
     TokenAdapter memory adapterRecord = adaptersByWrapperToken[wrapper];
     return adapterRecord.adapter == adapter;
   }
 
-  function getAdaptersList(address underlying) public view returns (address[] memory list) {
+  function getAdaptersList(address underlying) public view override returns (address[] memory list) {
     list = tokenAdapters[underlying];
   }
 
-  function getAdapterForWrapperToken(address wrapperToken) external view returns (address) {
+  function getAdapterForWrapperToken(address wrapperToken) external view override returns (address) {
     return adaptersByWrapperToken[wrapperToken].adapter;
   }
 
-  function getAdaptersCount(address underlying) external view returns (uint256) {
+  function getAdaptersCount(address underlying) external view override returns (uint256) {
     return tokenAdapters[underlying].length;
   }
 
   function getAdaptersSortedByAPR(address underlying)
     public
     view
+    override
     returns (address[] memory adapters, uint256[] memory aprs)
   {
     adapters = getAdaptersList(underlying);
@@ -283,6 +256,7 @@ contract AdapterRegistry is Ownable() {
   )
     public
     view
+    override
     returns (address[] memory adapters, uint256[] memory aprs)
   {
     adapters = getAdaptersList(underlying);
@@ -307,7 +281,7 @@ contract AdapterRegistry is Ownable() {
     adapters.sortByDescendingScore(aprs);
   }
 
-  function getAdapterWithHighestAPR(address underlying) external view returns (address adapter, uint256 apr) {
+  function getAdapterWithHighestAPR(address underlying) external view override returns (address adapter, uint256 apr) {
     (address[] memory adapters, uint256[] memory aprs) = getAdaptersSortedByAPR(underlying);
     adapter = adapters[0];
     apr = aprs[0];
@@ -317,7 +291,7 @@ contract AdapterRegistry is Ownable() {
     address underlying,
     uint256 deposit,
     address excludingAdapter
-  ) external view returns (address adapter, uint256 apr) {
+  ) external view override returns (address adapter, uint256 apr) {
     (address[] memory adapters, uint256[] memory aprs) = getAdaptersSortedByAPRWithDeposit(
       underlying,
       deposit,

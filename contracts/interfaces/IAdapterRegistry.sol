@@ -40,6 +40,10 @@ interface IAdapterRegistry {
 
   function protocolAdapterIds(address protocolAdapter) external view returns (uint256 id);
 
+  function vaultsByUnderlying(address underlying) external view returns (address vault);
+
+  function approvedVaultFactories(address factory) external view returns (bool approved);
+
 /* ========== Vault Factory Management ========== */
 
   function addVaultFactory(address _factory) external;
