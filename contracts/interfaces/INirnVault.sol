@@ -124,31 +124,11 @@ interface INirnVault {
     uint256[] memory weights
   );
 
-/* ========== Liquidity Delta Queries ========== */
+/* ========== Status Queries ========== */
 
   function getCurrentLiquidityDeltas() external view returns (int256[] memory liquidityDeltas);
-  
-  function getHypotheticalLiquidityDeltas(
-    uint256[] calldata proposedWeights
-  ) external view returns (int256[] memory liquidityDeltas);
-  
-  function getHypotheticalLiquidityDeltas(
-    IErc20Adapter[] calldata proposedAdapters,
-    uint256[] calldata proposedWeights
-  ) external view returns (int256[] memory liquidityDeltas);
-
-/* ========== APR Queries ========== */
 
   function getAPR() external view returns (uint256);
-
-  function getAPRs() external view returns (uint256[] memory aprs);
-
-  function getHypotheticalAPR(uint256[] memory proposedWeights) external view returns (uint256);
-
-  function getHypotheticalAPR(
-    IErc20Adapter[] calldata proposedAdapters,
-    uint256[] calldata proposedWeights
-  ) external view returns (uint256);
 
 /* ========== Deposit/Withdraw ========== */
 

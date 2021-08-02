@@ -28,7 +28,7 @@ contract NirnVault is NirnVaultBase {
     address _eoaSafeCaller
   ) NirnVaultBase(_registry, _eoaSafeCaller) {}
 
-/* ========== Liquidity Delta Queries ========== */
+/* ========== Status Queries ========== */
 
   function getCurrentLiquidityDeltas() external view override returns (int256[] memory liquidityDeltas) {
     (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
@@ -40,81 +40,9 @@ contract NirnVault is NirnVaultBase {
     );
   }
 
-  function getHypotheticalLiquidityDeltas(
-    uint256[] memory proposedWeights
-  ) public view override returns (int256[] memory liquidityDeltas) {
-    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
-    require(proposedWeights.length == adapters.length, "bad lengths");
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      balanceSheet.balances,
-      proposedWeights
-    );
-  }
-
-  function getHypotheticalLiquidityDeltas(
-    IErc20Adapter[] memory proposedAdapters,
-    uint256[] memory proposedWeights
-  ) external view override returns (int256[] memory liquidityDeltas) {
-    require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balance().mulSubFractionE18(reserveRatio),
-      proposedAdapters.getBalances(),
-      proposedWeights
-    );
-  }
-
-/* ========== APR Queries ========== */
-
   function getAPR() external view override returns (uint256) {
     (DistributionParameters memory params,,) = currentDistribution();
     return params.netAPR;
-  }
-
-  function getAPRs() external view override returns (uint256[] memory aprs) {
-    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      balanceSheet.balances,
-      weights
-    );
-    uint256 len = adapters.length;
-    aprs = new uint256[](len);
-    for (uint256 i; i < len; i++) {
-      aprs[i] = adapters[i].getHypotheticalAPR(liquidityDeltas[i]);
-    }
-  }
-
-  function getHypotheticalAPR(uint256[] memory proposedWeights) external view override returns (uint256) {
-    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
-    require(proposedWeights.length == adapters.length, "bad lengths");
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      balanceSheet.balances,
-      proposedWeights
-    );
-    return adapters.getNetAPR(proposedWeights, liquidityDeltas).mulSubFractionE18(reserveRatio);
-  }
-
-  function getHypotheticalAPR(
-    IErc20Adapter[] memory proposedAdapters,
-    uint256[] memory proposedWeights
-  ) external view override returns (uint256) {
-    require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      proposedAdapters.getBalances(),
-      proposedWeights
-    );
-    return proposedAdapters.getNetAPR(
-      proposedWeights,
-      liquidityDeltas
-    ).mulSubFractionE18(reserveRatio);
   }
 
 /* ========== Deposit/Withdraw ========== */
