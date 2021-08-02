@@ -490,6 +490,19 @@ describe('NirnVault', () => {
     })
   })
 
+  describe('decimals()', () => {
+    setupTests()
+
+    it('Should return 18 if underlying does not have decimals', async () => {
+      expect(await vault.decimals()).to.eq(18)
+    })
+
+    it('Should return underlying.decimals() if it does not revert', async () => {
+      await underlying.setDecimals(6)
+      expect(await vault.decimals()).to.eq(6)
+    })
+  })
+
   describe('currentDistribution()', () => {
     setupTests(true);
 
