@@ -97,6 +97,18 @@ interface INirnVault {
 
   function reserveBalance() external view returns (uint256);
 
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) external view returns (uint256);
+
+  function toWrappedAmount(uint256 underlyingAmount) external view returns (uint256);
+
+/* ========== Caller Balance Queries ========== */
+
+  function balanceWrapped() external view returns (uint256);
+
+  function balanceUnderlying() external view returns (uint256);
+
 /* ========== Fee Queries ========== */
 
   function getPendingFees() external view returns (uint256);

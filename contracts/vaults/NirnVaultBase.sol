@@ -302,6 +302,26 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
     return totalBalance.toFractionE18(supply);
   }
 
+/* ========== Conversion Queries ========== */
+
+  function toUnderlyingAmount(uint256 tokenAmount) public view override returns (uint256) {
+    return tokenAmount.mulFractionE18(getPricePerFullShareWithFee());
+  }
+
+  function toWrappedAmount(uint256 underlyingAmount) external view override returns (uint256) {
+    return underlyingAmount.mul(1e18) / getPricePerFullShareWithFee();
+  }
+
+/* ========== Caller Balance Queries ========== */
+
+  function balanceWrapped() external view override returns (uint256) {
+    return balanceOf[msg.sender];
+  }
+
+  function balanceUnderlying() external view override returns (uint256) {
+    return toUnderlyingAmount(balanceOf[msg.sender]);
+  }
+
 /* ========== Update Hooks ========== */
 
   function beforeAddAdapter(IErc20Adapter adapter) internal {
