@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
+pragma abicoder v2;
 
 import "../OwnableProxyImplementation.sol";
 import "../interfaces/IAdapterRegistry.sol";
@@ -294,16 +295,6 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
 
   function claimFees() external {
     claimFees(balance(), totalSupply);
-  }
-
-  function balanceAndSupplyWithFee() internal view returns (uint256 totalBalance, uint256 supply) {
-    totalBalance = balance();
-    supply = totalSupply;
-    uint256 pendingFees = calculateFee(totalBalance, supply);
-    if (pendingFees > 0) {
-      uint256 equivalentShares = pendingFees.mul(supply) / totalBalance.sub(pendingFees);
-      supply = supply.add(equivalentShares);
-    }
   }
 
 /* ========== Price Queries ========== */
