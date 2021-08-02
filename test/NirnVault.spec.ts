@@ -477,6 +477,37 @@ describe('NirnVault', () => {
     })
   })
 
+  describe('currentDistribution()', () => {
+    setupTests(true);
+
+    it('Should return correct params before any deposits are made to adapters', async () => {
+      const dist = await vault.currentDistribution();
+      expect(dist.totalProductiveBalance).to.eq(getBigNumber(9))
+      expect(dist._reserveBalance).to.eq(TEN_E18)
+      expect(dist.params.adapters).to.deep.eq([adapter1.address])
+      expect(dist.params.weights).to.deep.eq([ONE_E18])
+      expect(dist.params.liquidityDeltas).to.deep.eq([getBigNumber(9)])
+      expect(dist.params.balances).to.deep.eq([BigNumber.from(0)])
+      let apr = await adapter1.getHypotheticalAPR(getBigNumber(9))
+      apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
+      expect(dist.params.netAPR).to.eq(apr)
+    })
+
+    it('Should return correct params after deposits are made to adapters', async () => {
+      await vault.rebalance()
+      const dist = await vault.currentDistribution();
+      expect(dist.totalProductiveBalance).to.eq(getBigNumber(9))
+      expect(dist._reserveBalance).to.eq(ONE_E18)
+      expect(dist.params.adapters).to.deep.eq([adapter1.address])
+      expect(dist.params.weights).to.deep.eq([ONE_E18])
+      expect(dist.params.liquidityDeltas).to.deep.eq([BigNumber.from(0)])
+      expect(dist.params.balances).to.deep.eq([getBigNumber(9)])
+      let apr = await adapter1.getAPR()
+      apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
+      expect(dist.params.netAPR).to.eq(apr)
+    })
+  })
+
   describe('sellRewards()', () => {
     let rewardsSeller: TestRewardsSeller
     let token: TestERC20
