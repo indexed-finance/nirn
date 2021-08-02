@@ -1056,6 +1056,18 @@ describe('NirnVault', () => {
       })
     })
 
+    it('Should revert if minimum delay has not passed', async () => {
+      await vault.rebalanceWithNewWeights([getBigNumber(6, 17), getBigNumber(4, 17)])
+      await expect(vault.rebalanceWithNewWeights([getBigNumber(6, 17), getBigNumber(4, 17)]))
+        .to.be.revertedWith('too soon')
+    })
+
+    it('Should set canChangeCompositionAfter to timestamp + min delay', async () => {
+      const tx = await vault.rebalanceWithNewWeights([getBigNumber(6, 17), getBigNumber(4, 17)])
+      const {timestamp} = await ethers.provider.getBlock((await tx.wait()).blockHash)
+      expect(await vault.canChangeCompositionAfter()).to.eq(timestamp + 3600)
+    })
+
     it('Should remove adapters with weight 0 which can be withdrawn', async () => {
       await vault.setAdaptersAndWeightsInternal(
         [adapter1.address, adapter2.address, adapter3.address],
