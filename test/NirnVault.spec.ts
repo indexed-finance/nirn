@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { BigNumber, constants, ContractTransaction } from "ethers";
-import { waffle } from "hardhat";
+import { waffle, ethers } from "hardhat";
 import { AdapterRegistry, TestAdapter, TestNirnVault, TestERC20, TestVault, CallForwarder, TestRewardsSeller } from "../typechain"
 import { createBalanceCheckpoint, createSnapshot, deployClone, deployContract, getBigNumber } from "./shared";
 import { deployTestAdaptersAndRegistry, deployTestERC20, deployTestWrapperAndAdapter } from "./shared/fixtures";
@@ -156,37 +156,6 @@ describe('NirnVault', () => {
       })
     })
 
-    describe('currentDistribution()', () => {
-      setupTests(true);
-
-      it('Should return correct params before any deposits are made to adapters', async () => {
-        const dist = await vault.currentDistributionInternal();
-        expect(dist.totalProductiveBalance).to.eq(getBigNumber(9))
-        expect(dist._reserveBalance).to.eq(TEN_E18)
-        expect(dist.params.adapters).to.deep.eq([adapter1.address])
-        expect(dist.params.weights).to.deep.eq([ONE_E18])
-        expect(dist.params.liquidityDeltas).to.deep.eq([getBigNumber(9)])
-        expect(dist.params.balances).to.deep.eq([BigNumber.from(0)])
-        let apr = await adapter1.getHypotheticalAPR(getBigNumber(9))
-        apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
-        expect(dist.params.netAPR).to.eq(apr)
-      })
-
-      it('Should return correct params after deposits are made to adapters', async () => {
-        await vault.rebalance()
-        const dist = await vault.currentDistributionInternal();
-        expect(dist.totalProductiveBalance).to.eq(getBigNumber(9))
-        expect(dist._reserveBalance).to.eq(ONE_E18)
-        expect(dist.params.adapters).to.deep.eq([adapter1.address])
-        expect(dist.params.weights).to.deep.eq([ONE_E18])
-        expect(dist.params.liquidityDeltas).to.deep.eq([BigNumber.from(0)])
-        expect(dist.params.balances).to.deep.eq([getBigNumber(9)])
-        let apr = await adapter1.getAPR()
-        apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
-        expect(dist.params.netAPR).to.eq(apr)
-      })
-    })
-
     describe('balanceSheetInternal()', () => {
       setupTests(true);
 
@@ -213,7 +182,7 @@ describe('NirnVault', () => {
       
       it('Should revert if new distribution does not improve APR', async () => {
         await vault.rebalance()
-        const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
+        const { params: currentParams, totalProductiveBalance } = await vault.currentDistribution()
         await expect(
           vault.processProposedDistributionInternal(
             currentParams,
@@ -229,7 +198,7 @@ describe('NirnVault', () => {
         await adapter2.setAnnualInterest((await adapter1.annualInterest()).mul(102).div(100))
         // Mint 1 token so APR calculation does not divide by zero
         await adapter2.mintTo(`0x${'ff'.repeat(20)}`, ONE_E18)
-        const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
+        const { params: currentParams, totalProductiveBalance } = await vault.currentDistribution()
         await expect(
           vault.processProposedDistributionInternal(
             currentParams,
@@ -243,7 +212,7 @@ describe('NirnVault', () => {
       it('Should include removed adapters in the end of the new params', async () => {
         await vault.rebalance()
         await adapter2.setAnnualInterest((await adapter1.annualInterest()).mul(106).div(100))
-        const { params: currentParams, totalProductiveBalance } = await vault.currentDistributionInternal()
+        const { params: currentParams, totalProductiveBalance } = await vault.currentDistribution()
         const newParams = await vault.processProposedDistributionInternal(
           currentParams,
           totalProductiveBalance,
@@ -605,7 +574,7 @@ describe('NirnVault', () => {
       await deposit(TEN_E18)
       await underlying.mint(vault.address, TEN_E18)
       const fees = getBigNumber(1)
-      const feeShares = fees.mul(TEN_E18).div(getBigNumber(195, 17))
+      const feeShares = fees.mul(TEN_E18).div(getBigNumber(19))
       const shares = TEN_E18
         .mul(TEN_E18.add(feeShares))
         .div(getBigNumber(20))
@@ -669,7 +638,7 @@ describe('NirnVault', () => {
       await underlying.mint(vault.address, TEN_E18)
       await vault.rebalance()
       const fees = getBigNumber(1)
-      const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(195, 17))
+      const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(19))
       const underlyingWithdrawn = FIVE_E18.mul(getBigNumber(20)).div(TEN_E18.add(sharesForFees))
       const newReserves = toReserve(getBigNumber(20).sub(underlyingWithdrawn))
       await expect(vault.withdraw(FIVE_E18))
@@ -757,7 +726,7 @@ describe('NirnVault', () => {
       await vault.rebalance()
       const amount = FIVE_E18
       const fees = getBigNumber(1)
-      const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(195, 17))
+      const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(19))
       const newReserves = toReserve(getBigNumber(15))
       const underlyingWithdrawn = amount.add(newReserves).sub(getBigNumber(2))
       const sharesBurned = amount.mul(TEN_E18.add(sharesForFees)).div(getBigNumber(20))
@@ -835,75 +804,11 @@ describe('NirnVault', () => {
     })
   })
 
-  describe('Liquidity delta queries', () => {
-    describe('getCurrentLiquidityDeltas()', () => {
-      setupTests(true)
-  
-      it('Should return amounts that should be added or removed per adapter', async () => {
-        expect(await vault.getCurrentLiquidityDeltas()).to.deep.eq([ getBigNumber(9) ])
-      })
-    })
-  
-    describe('getHypotheticalLiquidityDeltas(uint256[])', () => {
-      setupTests(true)
-  
-      it('Should revert if weights.length != adapters.length', async () => {
-        await expect(
-          vault["getHypotheticalLiquidityDeltas(uint256[])"]([getBigNumber(5, 17), ONE_E18])
-        ).to.be.revertedWith('bad lengths')
-      })
-  
-      it('Should return weighted amounts that should be deposited per adapter', async () => {
-        expect(await vault["getHypotheticalLiquidityDeltas(uint256[])"]([getBigNumber(5, 17)])).to.deep.eq([ getBigNumber(45, 17) ])
-      })
-  
-      it('Should return current deltas if given current weights', async () => {
-        expect(await vault["getHypotheticalLiquidityDeltas(uint256[])"]([ONE_E18])).to.deep.eq(await vault.getCurrentLiquidityDeltas())
-      })
-  
-      it('Accounts for existing deposits', async () => {
-        await vault.rebalance()
-        const wBalance = await wrapper1.balanceOf(vault.address)
-        const balanceValue = await adapter1.toUnderlyingAmount(wBalance)
-        const totalUnderlying = balanceValue.add(ONE_E18)
-        const available = totalUnderlying.sub(totalUnderlying.mul(1).div(10))
-        const expectedDelta = available.mul(getBigNumber(5, 17)).div(ONE_E18).sub(balanceValue)
-        expect(await vault["getHypotheticalLiquidityDeltas(uint256[])"]([getBigNumber(5, 17)])).to.deep.eq([ expectedDelta ])
-      })
-    })
-  
-    describe('getHypotheticalLiquidityDeltas(address[],uint256[])', () => {
-      setupTests(true)
-  
-      it('Should revert if weights.length != adapters.length', async () => {
-        await expect(vault["getHypotheticalLiquidityDeltas(address[],uint256[])"](
-          [adapter1.address],
-          [getBigNumber(5, 17), getBigNumber(5, 17)]
-        )).to.be.revertedWith('bad lengths')
-      })
-  
-      it('Should return weighted amounts that should be deposited per adapter', async () => {
-        expect(await vault["getHypotheticalLiquidityDeltas(address[],uint256[])"](
-          [adapter1.address, adapter2.address],
-          [getBigNumber(5, 17), getBigNumber(5, 17)]
-        )).to.deep.eq(
-          [ getBigNumber(45, 17), getBigNumber(45, 17) ]
-        )
-      })
-  
-      it('Accounts for existing deposits', async () => {
-        await vault.rebalance()
-        const wBalance = await wrapper1.balanceOf(vault.address)
-        const balanceValue = await adapter1.toUnderlyingAmount(wBalance)
-        const totalUnderlying = balanceValue.add(ONE_E18)
-        const available = totalUnderlying.sub(totalUnderlying.mul(1).div(10))
-        const expectedDelta1 = available.mul(getBigNumber(5, 17)).div(ONE_E18).sub(balanceValue)
-        const expectedDelta2 = available.mul(getBigNumber(5, 17)).div(ONE_E18)
-        expect(await vault["getHypotheticalLiquidityDeltas(address[],uint256[])"](
-          [adapter1.address, adapter2.address],
-          [getBigNumber(5, 17), getBigNumber(5, 17)]
-        )).to.deep.eq([ expectedDelta1, expectedDelta2 ])
-      })
+  describe('getCurrentLiquidityDeltas()', () => {
+    setupTests(true)
+
+    it('Should return amounts that should be added or removed per adapter', async () => {
+      expect(await vault.getCurrentLiquidityDeltas()).to.deep.eq([ getBigNumber(9) ])
     })
   })
 
@@ -924,7 +829,7 @@ describe('NirnVault', () => {
       it('Should return amount of underlying per share after fees', async () => {
         expect(await vault.getPricePerFullShareWithFee()).to.eq(ONE_E18)
         await underlying.mint(vault.address, TEN_E18)
-        expect(await vault.getPricePerFullShareWithFee()).to.eq(getBigNumber(195, 16))
+        expect(await vault.getPricePerFullShareWithFee()).to.eq(getBigNumber(19, 17))
       })
   
       it('Should return amount of underlying per share if no fees owed', async () => {
@@ -956,100 +861,17 @@ describe('NirnVault', () => {
     })
   })
 
-  describe('APR queries', () => {
-    describe('getAPR()', () => {
-      setupTests(true)
-  
-      it('Should return APR accounting for current liquidity deltas and reserveRatio', async () => {
-        let apr = await adapter1.getHypotheticalAPR(getBigNumber(9))
-        apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
-        expect(await vault.getAPR()).to.eq(apr)
-        await vault.rebalance()
-        apr = await adapter1.getAPR()
-        apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
-        expect(diff(await vault.getAPR(), apr)).to.be.lte(1)
-      })
-    })
+  describe('getAPR()', () => {
+    setupTests(true)
 
-    describe('getAPRs()', () => {
-      setupTests(true)
-
-      it('Should return APRs of adapters accounting for liquidity deltas', async () => {
-        await vault.setAdaptersAndWeightsInternal(
-          [adapter1.address, adapter2.address],
-          [getBigNumber(5, 17), getBigNumber(5, 17)]
-        )
-        let apr1 = await adapter1.getHypotheticalAPR(getBigNumber(45, 17))
-        let apr2 = await adapter2.getHypotheticalAPR(getBigNumber(45, 17))
-        expect(await vault.getAPRs()).to.deep.eq([apr1, apr2])
-      })
-    })
-  
-    describe('getHypotheticalAPR(uint256[])', () => {
-      setupTests(true)
-  
-      it('Should revert if weights.length != adapters.length', async () => {
-        await expect(vault["getHypotheticalAPR(uint256[])"]([ONE_E18, ONE_E18])).to.be.revertedWith('bad lengths')
-      })
-  
-      it('Should return APR for hypothetical new weights', async () => {
-        let apr = await adapter1.getHypotheticalAPR(getBigNumber(45, 17))
-        apr = apr.mul(9).div(20)
-        expect(await vault["getHypotheticalAPR(uint256[])"]([getBigNumber(5, 17)])).to.eq(apr)
-      })
-  
-      it('Accounts for deposits', async () => {
-        await vault.rebalance()
-        const wBalance = await wrapper1.balanceOf(vault.address)
-        const balanceValue = await adapter1.toUnderlyingAmount(wBalance)
-        const totalUnderlying = balanceValue.add(ONE_E18)
-        const available = totalUnderlying.sub(totalUnderlying.mul(1).div(10))
-        const delta = available.div(2).sub(balanceValue)
-        let apr = await adapter1.getHypotheticalAPR(delta)
-        apr = apr.mul(9).div(20)
-        expect(await vault["getHypotheticalAPR(uint256[])"]([getBigNumber(5, 17)])).to.eq(apr)
-      })
-    })
-  
-    describe('getHypotheticalAPR(address[],uint256[])', () => {
-      setupTests(true)
-  
-      it('Should revert if weights.length != adapters.length', async () => {
-        await expect(vault["getHypotheticalAPR(address[],uint256[])"](
-          [adapter1.address],
-          [ONE_E18, ONE_E18]
-        )).to.be.revertedWith('bad lengths')
-      })
-  
-      it('Should return APR for hypothetical new weights and adapters', async () => {
-        let apr1 = (await adapter1.getHypotheticalAPR(getBigNumber(45, 17))).div(2)
-        let apr2 = (await adapter2.getHypotheticalAPR(getBigNumber(45, 17))).div(2)
-        let apr = apr1.add(apr2)
-        apr = apr.sub(apr.mul(1).div(10))
-        expect(await vault["getHypotheticalAPR(address[],uint256[])"](
-          [adapter1.address, adapter2.address],
-          [getBigNumber(5, 17), getBigNumber(5, 17)]
-        )).to.eq(apr)
-      })
-  
-      it('Accounts for deposits', async () => {
-        await vault.rebalance()
-        const wBalance = await wrapper1.balanceOf(vault.address)
-        const balanceValue = await adapter1.toUnderlyingAmount(wBalance)
-        const totalUnderlying = balanceValue.add(ONE_E18)
-        const available = totalUnderlying.sub(totalUnderlying.mul(1).div(10))
-        const target = available.mul(getBigNumber(5, 17)).div(ONE_E18)
-        const delta1 = target.sub(balanceValue)
-        const delta2 = target
-        let apr1 = (await adapter1.getHypotheticalAPR(delta1)).mul(getBigNumber(5, 17)).div(ONE_E18)
-        let apr2 = (await adapter2.getHypotheticalAPR(delta2)).mul(getBigNumber(5, 17)).div(ONE_E18)
-        let apr = apr1.add(apr2)
-        apr = apr.sub(apr.div(10))
-        expect(await vault["getHypotheticalAPR(address[],uint256[])"](
-          [adapter1.address, adapter2.address],
-          [getBigNumber(5, 17), getBigNumber(5, 17)]
-        )).to.eq(apr)
-      })
+    it('Should return APR accounting for current liquidity deltas and reserveRatio', async () => {
+      let apr = await adapter1.getHypotheticalAPR(getBigNumber(9))
+      apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
+      expect(await vault.getAPR()).to.eq(apr)
+      await vault.rebalance()
+      apr = await adapter1.getAPR()
+      apr = apr.sub(apr.mul(getBigNumber(1,17)).div(ONE_E18))
+      expect(diff(await vault.getAPR(), apr)).to.be.lte(1)
     })
   })
 
