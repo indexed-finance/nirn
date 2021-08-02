@@ -25,8 +25,8 @@ contract NirnVaultFactory is Ownable() {
 
   address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
   uint256 public constant minimumAdapters = 2;
-  bytes32 public constant erc20VaultImplementationId = keccak256("NirnVault.sol");
-  bytes32 public constant ethVaultImplementationId = keccak256("EthNirnVault.sol");
+  bytes32 public constant erc20VaultImplementationId = keccak256("NirnVaultV1");
+  bytes32 public constant ethVaultImplementationId = keccak256("EthNirnVaultV1");
   IProxyManager public immutable proxyManager;
   IAdapterRegistry public immutable registry;
 
@@ -91,17 +91,12 @@ contract NirnVaultFactory is Ownable() {
   function deployVault(address underlying) external {
     require(_approvedTokens.contains(underlying), "!approved");
     require(registry.getAdaptersCount(underlying) >= minimumAdapters, "insufficient adapters");
-    address _defaultRewardsSeller = defaultRewardsSeller;
     address _defaultFeeRecipient = defaultFeeRecipient;
-    require(
-      _defaultRewardsSeller != address(0) &&
-      _defaultFeeRecipient != address(0),
-      "null default"
-    );
+    require(_defaultFeeRecipient != address(0), "null default");
     bytes32 implementationId = getImplementationId(underlying);
     bytes32 salt = keccak256(abi.encode(underlying));
     address vault = proxyManager.deployProxyManyToOne(implementationId, salt);
-    INirnVault(vault).initialize(underlying, _defaultRewardsSeller, _defaultFeeRecipient, owner());
+    INirnVault(vault).initialize(underlying, defaultRewardsSeller, _defaultFeeRecipient, owner());
     registry.addVault(vault);
   }
 }

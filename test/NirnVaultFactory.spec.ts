@@ -13,8 +13,8 @@ const sha3 = (value: string) => {
   return keccak256(buf);
 }
 
-const erc20VaultImplementationId = sha3('NirnVault.sol')
-const ethVaultImplementationId = sha3('EthNirnVault.sol')
+const erc20VaultImplementationId = sha3('NirnVaultV1')
+const ethVaultImplementationId = sha3('EthNirnVaultV1')
 
 describe('NirnVaultFactory', () => {
   const [wallet, wallet1, rewardsSeller, feeRecipient, protocolAdapter] = waffle.provider.getWallets()
@@ -161,14 +161,22 @@ describe('NirnVaultFactory', () => {
       ).to.be.revertedWith('insufficient adapters')
     })
 
-    it('Should revert if defaultRewardsSeller not set', async () => {
+    it('Should not revert if defaultRewardsSeller not set', async () => {
       await registry.addProtocolAdapter(protocolAdapter.address)
       await registry.connect(protocolAdapter).addTokenAdapter(adapter1.address)
       await registry.connect(protocolAdapter).addTokenAdapter(adapter2.address)
       await factory.approveToken(underlying.address)
       await factory.setDefaultFeeRecipient(feeRecipient.address)
+      const vaultAddress = await factory.computeVaultAddress(underlying.address)
       await expect(factory.deployVault(underlying.address))
-        .to.be.revertedWith('null default')
+        .to.emit(registry, 'VaultAdded')
+        .withArgs(underlying.address, vaultAddress)
+        .to.emit(proxyManager, 'DeployedProxy')
+        .withArgs(erc20VaultImplementationId, vaultAddress)
+      const vault = await getContract<NirnVault>(vaultAddress, 'NirnVault')
+      expect(await vault.rewardsSeller()).to.eq(constants.AddressZero)
+      expect(await vault.feeRecipient()).to.eq(feeRecipient.address)
+      expect(await vault.underlying()).to.eq(underlying.address)
     })
 
     it('Should revert if defaultFeeRecipient not set', async () => {
