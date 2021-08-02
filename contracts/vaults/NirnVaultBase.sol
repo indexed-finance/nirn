@@ -154,6 +154,7 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
     address _feeRecipient,
     address _owner
   ) external override initializer(_owner) {
+    require(_feeRecipient != address(0), "null address");
     underlying = _underlying;
     feeRecipient = _feeRecipient;
     rewardsSeller = IRewardsSeller(_rewardsSeller);
@@ -190,6 +191,7 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
   }
 
   function setFeeRecipient(address _feeRecipient) external override onlyOwner {
+    require(_feeRecipient != address(0), "null address");
     feeRecipient = _feeRecipient;
     emit SetFeeRecipient(_feeRecipient);
   }
