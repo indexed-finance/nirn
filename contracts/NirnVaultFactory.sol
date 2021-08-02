@@ -25,8 +25,8 @@ contract NirnVaultFactory is Ownable() {
 
   address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
   uint256 public constant minimumAdapters = 2;
-  bytes32 public constant erc20VaultImplementationId = keccak256("NirnVaultV1");
-  bytes32 public constant ethVaultImplementationId = keccak256("EthNirnVaultV1");
+  bytes32 public constant erc20VaultImplementationId = keccak256("NirnVaultV1.sol");
+  bytes32 public constant ethVaultImplementationId = keccak256("EthNirnVaultV1.sol");
   IProxyManager public immutable proxyManager;
   IAdapterRegistry public immutable registry;
 

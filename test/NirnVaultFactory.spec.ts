@@ -13,8 +13,8 @@ const sha3 = (value: string) => {
   return keccak256(buf);
 }
 
-const erc20VaultImplementationId = sha3('NirnVaultV1')
-const ethVaultImplementationId = sha3('EthNirnVaultV1')
+const erc20VaultImplementationId = sha3('NirnVaultV1.sol')
+const ethVaultImplementationId = sha3('EthNirnVaultV1.sol')
 
 describe('NirnVaultFactory', () => {
   const [wallet, wallet1, rewardsSeller, feeRecipient, protocolAdapter] = waffle.provider.getWallets()
