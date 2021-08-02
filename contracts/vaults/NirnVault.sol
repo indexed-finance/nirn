@@ -234,7 +234,7 @@ contract NirnVault is NirnVaultBase {
     emit Rebalanced();
   }
 
-  function rebalanceWithNewWeights(uint256[] memory proposedWeights) external override onlyEOA {
+  function rebalanceWithNewWeights(uint256[] memory proposedWeights) external override onlyEOA changesComposition {
     (
       DistributionParameters memory params,
       uint256 totalProductiveBalance,
@@ -344,7 +344,7 @@ contract NirnVault is NirnVaultBase {
   function rebalanceWithNewAdapters(
     IErc20Adapter[] calldata proposedAdapters,
     uint256[] calldata proposedWeights
-  ) external override onlyEOA {
+  ) external override onlyEOA changesComposition {
     RebalanceValidation.validateAdaptersAndWeights(registry, underlying, proposedAdapters, proposedWeights);
     (
       DistributionParameters memory currentParams,

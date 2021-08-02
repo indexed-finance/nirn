@@ -79,6 +79,10 @@ interface INirnVault {
 
   function priceAtLastFee() external view returns (uint128);
 
+  function minimumCompositionChangeDelay() external view returns (uint256);
+
+  function canChangeCompositionAfter() external view returns (uint96);
+
 /* ========== Admin Actions ========== */
 
   function setMaximumUnderlying(uint256 _maximumUnderlying) external;

@@ -40,6 +40,8 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
   */
   uint256 public constant override minimumAPRImprovement = 5e16;
 
+  uint256 public constant override minimumCompositionChangeDelay = 1 hours;
+
   /** @dev Nirn adapter registry */
   IAdapterRegistry public immutable override registry;
 
@@ -50,6 +52,9 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
 
   /** @dev Underlying asset for the vault. */
   address public override underlying;
+
+  /** @dev Time at which a changing rebalance can be executed. */
+  uint96 public override canChangeCompositionAfter;
 
   /** @dev ERC20 name */
   string public override name;
@@ -122,6 +127,16 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
    */
   modifier onlyEOA {
     require(msg.sender == tx.origin || msg.sender == eoaSafeCaller, "!EOA");
+    _;
+  }
+
+  /**
+   * @dev Prevents composition-changing rebalances from being executed more
+   * frequently than the configured minimum delay;
+   */
+  modifier changesComposition {
+    require(block.timestamp >= canChangeCompositionAfter, "too soon");
+    canChangeCompositionAfter = block.timestamp.add(minimumCompositionChangeDelay).toUint96();
     _;
   }
 
