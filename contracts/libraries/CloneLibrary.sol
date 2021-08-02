@@ -27,17 +27,27 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * Originally from https://github.com/optionality/clone-factory/
  */
 library CloneLibrary {
-  function createClone(address target) internal returns (address result) {
+  function getCreateCode(address target) internal pure returns (bytes memory createCode) {
     // Reserve 55 bytes for the deploy code + 17 bytes as a buffer to prevent overwriting
     // other memory in the final mstore
-    bytes memory createCode = new bytes(72);
+    createCode = new bytes(72);
     assembly {
       let clone := add(createCode, 32)
       mstore(clone, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
       mstore(add(clone, 0x14), shl(96, target))
       mstore(add(clone, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
-      result := create(0, clone, 0x37)
+      mstore(createCode, 55)
     }
+  }
+
+  function createClone(address target) internal returns (address result) {
+    bytes memory createCode = getCreateCode(target);
+    assembly { result := create(0, add(createCode, 32), 55) }
+  }
+
+  function createClone(address target, bytes32 salt) internal returns (address result) {
+    bytes memory createCode = getCreateCode(target);
+    assembly { result := create2(0, add(createCode, 32), 55, salt) }
   }
 
   function isClone(address target, address query) internal view returns (bool result) {

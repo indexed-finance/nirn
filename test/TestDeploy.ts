@@ -10,18 +10,14 @@ import {
   AaveV2ProtocolAdapter,
   CompoundProtocolAdapter,
   CreamProtocolAdapter,
-  FuseTokenAdapterFactory,
   DyDxProtocolAdapter,
   FulcrumProtocolAdapter,
-  FuseProtocolAdapter,
-  IFusePoolDirectory,
-  FusePoolAdapter,
   IErc20Adapter,
   IERC20,
   IronBankProtocolAdapter,
   IIndexPool
 } from "../typechain"
-import { deployContract, deploy, getTokenSymbol, sendEtherTo, getContract, sendTokenTo, WETH, getIERC20 } from "./shared/utils"
+import { deployContract, deploy, getTokenSymbol, sendEtherTo, getContract, sendTokenTo, WETH, getIERC20 } from "./shared"
 
 
 describe('Deploy All', () => {
@@ -31,10 +27,8 @@ describe('Deploy All', () => {
   let aaveV2: AaveV2ProtocolAdapter
   let compound: CompoundProtocolAdapter
   let cream: CreamProtocolAdapter
-  let fTokenFactory: FuseTokenAdapterFactory
   let dydx: DyDxProtocolAdapter
   let fulcrum: FulcrumProtocolAdapter
-  let fuse: FuseProtocolAdapter
   let iron: IronBankProtocolAdapter
 
   let gasTotal: number
@@ -44,12 +38,9 @@ describe('Deploy All', () => {
     registry = await deployContract('AdapterRegistry')
     aaveV1 = await deployContract('AaveV1ProtocolAdapter', registry.address)
     aaveV2 = await deployContract('AaveV2ProtocolAdapter', registry.address)
-    fTokenFactory = await deployContract('FuseTokenAdapterFactory')
-    compound = await deployContract('CompoundProtocolAdapter', registry.address/* , cTokenFactory.address */)
-    cream = await deployContract('CreamProtocolAdapter', registry.address/* , cTokenFactory.address */)
-    iron = await deployContract('IronBankProtocolAdapter', registry.address/* , cTokenFactory.address */)
-    fuse = await deployContract('FuseProtocolAdapter', registry.address, fTokenFactory.address)
-    await fuse.deployTransaction.wait()
+    compound = await deployContract('CompoundProtocolAdapter', registry.address)
+    cream = await deployContract('CreamProtocolAdapter', registry.address)
+    iron = await deployContract('IronBankProtocolAdapter', registry.address)
     const nonce = await wallet.getTransactionCount()
     const nextAddress = getContractAddress({ from: wallet.address, nonce: nonce + 1 })
     const nextAddress2 = getContractAddress({ from: wallet.address, nonce: nonce + 3 })
@@ -64,7 +55,6 @@ describe('Deploy All', () => {
       aaveV2,
       compound,
       cream,
-      fuse,
       dydx,
       fulcrum,
       iron
@@ -77,7 +67,6 @@ describe('Deploy All', () => {
       await registry.addProtocolAdapter(aaveV2.address),
       await registry.addProtocolAdapter(compound.address),
       await registry.addProtocolAdapter(cream.address),
-      await registry.addProtocolAdapter(fuse.address),
       await registry.addProtocolAdapter(iron.address)
     ].map(tx => tx.hash);
 
@@ -124,6 +113,7 @@ describe('Deploy All', () => {
     let remainder = numTokens;
     let gasUsed = 0;
     while (remainder > 0) {
+      console.log(`Cream remainder ${remainder}`)
       const tx = await cream.map(5)
       gasUsed += (await tx.wait()).gasUsed.toNumber()
       remainder -= 5;
@@ -159,38 +149,6 @@ describe('Deploy All', () => {
     console.log(`FULCRUM: Mapped ${numTokens} | Avg Cost:`, (gasUsed / numTokens))
   })
 
-  let fuseStartId: number;
-
-  it('Fuse: Map Pools', async () => {
-    fuseStartId = await registry.protocolsCount().then((c: BigNumber) => c.toNumber())
-    const numPools = (await fuse.getUnmapped()).length;
-    const tx = await fuse.map(numPools)
-    const gasUsed = (await tx.wait()).gasUsed.toNumber()
-    gasTotal += gasUsed
-    console.log(`FUSE POOLS: Mapped ${numPools} | Avg Cost:`, (gasUsed / numPools))
-  })
-
-  it('Fuse Pools: Map Tokens', async () => {
-    const directory: IFusePoolDirectory = await getContract('0x835482FE0532f169024d5E9410199369aAD5C77E', 'IFusePoolDirectory')
-    const allPools = await directory.getAllPools()
-    const txs: Record<string, [string, number]> = {}
-
-    for (let i = 0; i < allPools.length; i++) {
-      const id = fuseStartId + i;
-      const { protocolAdapter, name } = await registry.getProtocolMetadata(id);
-      const fusePool: FusePoolAdapter = await getContract(protocolAdapter, 'FusePoolAdapter')
-      const numPools = (await fusePool.getUnmapped()).length;
-      const tx = await fusePool.map(numPools)
-      txs[tx.hash] = [name, numPools]
-    }
-    const receipts = await Promise.all(Object.keys(txs).map(tx => ethers.provider.getTransactionReceipt(tx)));
-    for (const receipt of receipts) {
-      const [name, numPools] = txs[receipt.transactionHash]
-      const gasUsed = receipt.gasUsed.toNumber()
-      gasTotal += gasUsed
-      console.log(`${name}: Mapped ${numPools} | Avg Cost:`, (gasUsed / numPools))
-    }
-  })
   const diff = (a: BigNumber, b: BigNumber) => a.gt(b) ? a.sub(b) : b.sub(a);
 
   async function testAdapterHypotheticalAPR(token: string, adapterAddress: string, debug = false) {
@@ -312,6 +270,17 @@ describe('Deploy All', () => {
   it('CC10', async () => {
     const index = '0xabafa52d3d5a2c18a4c1ae24480d22b831fc0413'
     await checkIndexAPR(index);
+  })
+
+  it('COST', async () => {
+    const tokens = await registry.getSupportedTokens();
+    const counts = await Promise.all(tokens.map(t => registry.getAdaptersCount(t)));
+    const mostSupportedTokens = tokens.filter((t, i) => counts[i].gt(2));
+    console.log(`-- TESTING HYPOTHETICAL APRS FOR DEPOSIT OF 100 TOKENS --`)
+    for (const token of mostSupportedTokens) {
+      const { adapter: adapterAddress } = await registry.getAdapterWithHighestAPR(token);
+      await testAdapterDeposit(token, adapterAddress)
+    }
   })
 
   // describe('Interactions', () => {

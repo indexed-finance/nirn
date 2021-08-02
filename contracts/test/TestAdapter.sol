@@ -16,12 +16,34 @@ contract TestAdapter {
   bool internal restrictedLiquidity;
   uint256 internal _availableLiquidity;
   bool internal revertOnAPRQQuery;
+  address[] internal revenueTokens;
+  uint256[] internal revenueAPRs;
 
   constructor(address _underlying, address _token, uint256 _annualInterest) {
     underlying = _underlying;
     token = _token;
     annualInterest = _annualInterest;
     _underlying.safeApproveMax(_token);
+  }
+
+  function setRevenueBreakdown(
+    address[] memory _revenueTokens,
+    uint256[] memory _revenueAPRs
+  ) external {
+    revenueTokens = _revenueTokens;
+    revenueAPRs = _revenueAPRs;
+  }
+
+  function getRevenueBreakdown()
+    external
+    view
+    returns (
+      address[] memory _revenueTokens,
+      uint256[] memory _revenueAPRs
+    )
+  {
+    _revenueTokens = revenueTokens;
+    _revenueAPRs = revenueAPRs;
   }
 
   function availableLiquidity() public view returns (uint256) {

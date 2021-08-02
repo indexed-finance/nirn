@@ -2,9 +2,10 @@ import { getAddress, getCreate2Address } from '@ethersproject/address';
 import { keccak256 } from '@ethersproject/keccak256';
 import { BigNumber } from 'ethers';
 import { ethers, waffle } from 'hardhat';
-import { IERC20, IWETH, IUniswapV2Pair, IERC20Metadata } from '../../typechain';
+import { IERC20, IWETH, IUniswapV2Pair, IERC20Metadata, IERC20MetadataBytes32 } from '../../typechain';
 import { formatEther, formatUnits, parseUnits } from '@ethersproject/units';
 import { getBigNumber, getContract, withSigner } from './utils';
+import { toUtf8String } from '@ethersproject/strings';
 
 export const SUSHISWAP_FACTORY_ADDRESS = '0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac'
 export const UNISWAP_FACTORY_ADDRESS = '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f';
@@ -22,8 +23,13 @@ export async function getTokenDecimals(token: IERC20) {
 }
 
 export async function getTokenSymbol(token: IERC20) {
-  const metadata: IERC20Metadata = await getContract(token.address, 'IERC20Metadata');
-  return metadata.symbol();
+  try {
+    const metadata: IERC20Metadata = await getContract(token.address, 'IERC20Metadata');
+    return metadata.symbol();
+  } catch (err) {
+    const metadata: IERC20MetadataBytes32 = await getContract(token.address, 'IERC20MetadataBytes32');
+    return toUtf8String(await metadata.symbol());
+  }
 }
 
 export async function createBalanceCheckpoint(token: IERC20 | null, account: string) {

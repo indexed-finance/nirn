@@ -25,13 +25,10 @@ contract NirnVault is NirnVaultBase {
 
   constructor(
     address _registry,
-    address _eoaSafeCaller,
-    address _underlying,
-    address _rewardsSeller,
-    address _feeRecipient
-  ) NirnVaultBase(_registry, _eoaSafeCaller, _underlying, _rewardsSeller, _feeRecipient) {}
+    address _eoaSafeCaller
+  ) NirnVaultBase(_registry, _eoaSafeCaller) {}
 
-/* ========== Liquidity Delta Queries ========== */
+/* ========== Status Queries ========== */
 
   function getCurrentLiquidityDeltas() external view override returns (int256[] memory liquidityDeltas) {
     (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
@@ -43,81 +40,9 @@ contract NirnVault is NirnVaultBase {
     );
   }
 
-  function getHypotheticalLiquidityDeltas(
-    uint256[] memory proposedWeights
-  ) public view override returns (int256[] memory liquidityDeltas) {
-    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
-    require(proposedWeights.length == adapters.length, "bad lengths");
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      balanceSheet.balances,
-      proposedWeights
-    );
-  }
-
-  function getHypotheticalLiquidityDeltas(
-    IErc20Adapter[] memory proposedAdapters,
-    uint256[] memory proposedWeights
-  ) external view override returns (int256[] memory liquidityDeltas) {
-    require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balance().mulSubFractionE18(reserveRatio),
-      proposedAdapters.getBalances(),
-      proposedWeights
-    );
-  }
-
-/* ========== APR Queries ========== */
-
   function getAPR() external view override returns (uint256) {
     (DistributionParameters memory params,,) = currentDistribution();
     return params.netAPR;
-  }
-
-  function getAPRs() external view override returns (uint256[] memory aprs) {
-    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      balanceSheet.balances,
-      weights
-    );
-    uint256 len = adapters.length;
-    aprs = new uint256[](len);
-    for (uint256 i; i < len; i++) {
-      aprs[i] = adapters[i].getHypotheticalAPR(liquidityDeltas[i]);
-    }
-  }
-
-  function getHypotheticalAPR(uint256[] memory proposedWeights) external view override returns (uint256) {
-    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
-    require(proposedWeights.length == adapters.length, "bad lengths");
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      balanceSheet.balances,
-      proposedWeights
-    );
-    return adapters.getNetAPR(proposedWeights, liquidityDeltas).mulSubFractionE18(reserveRatio);
-  }
-
-  function getHypotheticalAPR(
-    IErc20Adapter[] memory proposedAdapters,
-    uint256[] memory proposedWeights
-  ) external view override returns (uint256) {
-    require(proposedAdapters.length == proposedWeights.length, "bad lengths");
-    (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
-    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
-    int256[] memory liquidityDeltas = AdapterHelper.getLiquidityDeltas(
-      balanceSheet.totalProductiveBalance,
-      proposedAdapters.getBalances(),
-      proposedWeights
-    );
-    return proposedAdapters.getNetAPR(
-      proposedWeights,
-      liquidityDeltas
-    ).mulSubFractionE18(reserveRatio);
   }
 
 /* ========== Deposit/Withdraw ========== */
@@ -136,24 +61,56 @@ contract NirnVault is NirnVaultBase {
     uint256 supply = claimFees(bal, totalSupply);
     shares = supply == 0 ? amount : amount.mul(supply) / bal;
     _mint(to, shares);
+    emit Deposit(shares, amount);
   }
 
-  function withdraw(uint256 shares) external override returns (uint256 owed) {
+  function withdraw(uint256 shares) external override returns (uint256 amountOut) {
     (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
     BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
     uint256 supply = claimFees(balanceSheet.totalBalance, totalSupply);
-    owed = shares.mul(balanceSheet.totalBalance) / supply;
+    amountOut = shares.mul(balanceSheet.totalBalance) / supply;
+    withdrawInternal(
+      shares,
+      amountOut,
+      adapters,
+      weights,
+      balanceSheet
+    );
+  }
+
+  function withdrawUnderlying(uint256 amount) external override returns (uint256 shares) {
+    (IErc20Adapter[] memory adapters, uint256[] memory weights) = getAdaptersAndWeights();
+    BalanceSheet memory balanceSheet = getBalanceSheet(adapters);
+    uint256 supply = claimFees(balanceSheet.totalBalance, totalSupply);
+    shares = amount.mul(supply) / balanceSheet.totalBalance;
+    withdrawInternal(
+      shares,
+      amount,
+      adapters,
+      weights,
+      balanceSheet
+    );
+  }
+
+  function withdrawInternal(
+    uint256 shares,
+    uint256 amountOut,
+    IErc20Adapter[] memory adapters,
+    uint256[] memory weights,
+    BalanceSheet memory balanceSheet
+  ) internal {
     _burn(msg.sender, shares);
-    uint256 newReserves = balanceSheet.totalBalance.sub(owed).mulFractionE18(reserveRatio);
+    emit Withdrawal(shares, amountOut);
+    uint256 newReserves = balanceSheet.totalBalance.sub(amountOut).mulFractionE18(reserveRatio);
     withdrawToMatchAmount(
       adapters,
       weights,
       balanceSheet.balances,
       balanceSheet.reserveBalance,
-      owed,
+      amountOut,
       newReserves
     );
-    _transferOut(msg.sender, owed);
+    _transferOut(msg.sender, amountOut);
   }
 
   function withdrawToMatchAmount(
@@ -205,7 +162,7 @@ contract NirnVault is NirnVaultBase {
     emit Rebalanced();
   }
 
-  function rebalanceWithNewWeights(uint256[] memory proposedWeights) external override onlyEOA {
+  function rebalanceWithNewWeights(uint256[] memory proposedWeights) external override onlyEOA changesComposition {
     (
       DistributionParameters memory params,
       uint256 totalProductiveBalance,
@@ -231,15 +188,7 @@ contract NirnVault is NirnVaultBase {
     setAdaptersAndWeights(params.adapters, proposedWeights);
   }
 
-  struct DistributionParameters {
-    IErc20Adapter[] adapters;
-    uint256[] weights;
-    uint256[] balances;
-    int256[] liquidityDeltas;
-    uint256 netAPR;
-  }
-
-  function currentDistribution() internal view returns (
+  function currentDistribution() public view override returns (
     DistributionParameters memory params,
     uint256 totalProductiveBalance,
     uint256 _reserveBalance
@@ -315,7 +264,7 @@ contract NirnVault is NirnVaultBase {
   function rebalanceWithNewAdapters(
     IErc20Adapter[] calldata proposedAdapters,
     uint256[] calldata proposedWeights
-  ) external override onlyEOA {
+  ) external override onlyEOA changesComposition {
     RebalanceValidation.validateAdaptersAndWeights(registry, underlying, proposedAdapters, proposedWeights);
     (
       DistributionParameters memory currentParams,

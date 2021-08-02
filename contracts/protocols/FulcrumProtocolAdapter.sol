@@ -65,4 +65,3 @@ contract FulcrumProtocolAdapter is AbstractProtocolAdapter {
     return IERC20(loanPool).totalSupply() == 0;
   }
 }
-

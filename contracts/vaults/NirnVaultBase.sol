@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
+pragma abicoder v2;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "../OwnableProxyImplementation.sol";
 import "../interfaces/IAdapterRegistry.sol";
 import "../interfaces/IRewardsSeller.sol";
 import "../interfaces/INirnVault.sol";
@@ -16,7 +17,7 @@ import "./ERC20.sol";
  * @dev Base contract defining the constant and storage variables
  * for NirnVault, as well as basic state queries and setters.
  */
-abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
+abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVault {
   using SafeCast for uint256;
   using TransferHelper for address;
   using Fraction for uint256;
@@ -40,22 +41,27 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   */
   uint256 public constant override minimumAPRImprovement = 5e16;
 
+  uint256 public constant override minimumCompositionChangeDelay = 1 hours;
+
   /** @dev Nirn adapter registry */
   IAdapterRegistry public immutable override registry;
 
   /** @dev Address of a contract which can only execute specific functions and only allows EOAs to call. */
   address public immutable override eoaSafeCaller;
 
+/* ========== Storage ========== */
+
   /** @dev Underlying asset for the vault. */
-  address public immutable override underlying;
+  address public override underlying;
+
+  /** @dev Time at which a changing rebalance can be executed. */
+  uint96 public override canChangeCompositionAfter;
 
   /** @dev ERC20 name */
   string public override name;
 
   /** @dev ERC20 symbol */
   string public override symbol;
-
-/* ========== Storage ========== */
 
   /** @dev Tokens which can not be sold - wrapper tokens used by the adapters. */
   mapping(address => bool) public override lockedTokens;
@@ -73,16 +79,25 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   uint256 public override maximumUnderlying;
 
   /** @dev Fee taken on profit as a fraction of 1e18. */
-  uint64 public override performanceFee = 5e16;
+  uint64 public override performanceFee;
 
   /** @dev Ratio of underlying token to keep in the vault for cheap withdrawals as a fraction of 1e18. */
-  uint64 public override reserveRatio = 1e17;
+  uint64 public override reserveRatio;
 
   /** @dev Last price at which fees were taken. */
-  uint128 public override priceAtLastFee = 1e18;
+  uint128 public override priceAtLastFee;
 
   /** @dev Tightly packed token adapters encoded as (address,uint96). */
   bytes32[] internal packedAdaptersAndWeights;
+
+  /** @dev ERC20 decimals */
+  function decimals() external view override returns (uint8) {
+    try IERC20Metadata(underlying).decimals() returns (uint8 _decimals) {
+      return _decimals;
+    } catch {
+      return 18;
+    }
+  }
 
   function getAdaptersAndWeights() public view override returns (
     IErc20Adapter[] memory adapters,
@@ -125,32 +140,43 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     _;
   }
 
+  /**
+   * @dev Prevents composition-changing rebalances from being executed more
+   * frequently than the configured minimum delay;
+   */
+  modifier changesComposition {
+    require(block.timestamp >= canChangeCompositionAfter, "too soon");
+    canChangeCompositionAfter = block.timestamp.add(minimumCompositionChangeDelay).toUint96();
+    _;
+  }
+
 /* ========== Constructor ========== */
 
-  constructor(
-    address _registry,
-    address _eoaSafeCaller,
-    address _underlying,
-    address _rewardsSeller,
-    address _feeRecipient
-  ) {
+  constructor(address _registry, address _eoaSafeCaller) {
     registry = IAdapterRegistry(_registry);
     eoaSafeCaller = _eoaSafeCaller;
+  }
+
+  function initialize(
+    address _underlying,
+    address _rewardsSeller,
+    address _feeRecipient,
+    address _owner
+  ) external override initializer(_owner) {
+    require(_feeRecipient != address(0), "null address");
     underlying = _underlying;
     feeRecipient = _feeRecipient;
     rewardsSeller = IRewardsSeller(_rewardsSeller);
 
-    (address adapter,) = IAdapterRegistry(_registry).getAdapterWithHighestAPR(_underlying);
+    (address adapter,) = registry.getAdapterWithHighestAPR(_underlying);
     packedAdaptersAndWeights.push(AdapterHelper.packAdapterAndWeight(IErc20Adapter(adapter), 1e18));
-    // _beforeAddAdapter logic
-    // Can't use the function because immutables (underlying) can't be read in constructor.
-    _underlying.safeApproveMax(adapter);
-    address wrapper = IErc20Adapter(adapter).token();
-    wrapper.safeApproveMax(adapter);
-    lockedTokens[wrapper] = true;
+    beforeAddAdapter(IErc20Adapter(adapter));
 
     name = SymbolHelper.getPrefixedName("Indexed ", _underlying);
     symbol = SymbolHelper.getPrefixedSymbol("n", _underlying);
+    performanceFee = 1e17;
+    reserveRatio = 1e17;
+    priceAtLastFee = 1e18;
   }
 
 /* ========== Configuration Controls ========== */
@@ -174,6 +200,7 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
   }
 
   function setFeeRecipient(address _feeRecipient) external override onlyOwner {
+    require(_feeRecipient != address(0), "null address");
     feeRecipient = _feeRecipient;
     emit SetFeeRecipient(_feeRecipient);
   }
@@ -287,11 +314,15 @@ abstract contract NirnVaultBase is ERC20, Ownable(), INirnVault {
     return balance().toFractionE18(totalSupply);
   }
 
-  function getPricePerFullShareWithFee() external view override returns (uint256) {
+  function getPricePerFullShareWithFee() public view override returns (uint256) {
     uint256 totalBalance = balance();
     uint256 supply = totalSupply;
     uint256 pendingFees = calculateFee(totalBalance, supply);
-    return totalBalance.sub(pendingFees).toFractionE18(supply);
+    if (pendingFees > 0) {
+      uint256 equivalentShares = pendingFees.mul(supply) / totalBalance.sub(pendingFees);
+      supply = supply.add(equivalentShares);
+    }
+    return totalBalance.toFractionE18(supply);
   }
 
 /* ========== Update Hooks ========== */

@@ -17,6 +17,14 @@ interface IAdapterRegistry {
 
   event TokenSupportRemoved(address underlying);
 
+  event VaultFactoryAdded(address factory);
+
+  event VaultFactoryRemoved(address factory);
+
+  event VaultAdded(address underlying, address vault);
+
+  event VaultRemoved(address underlying, address vault);
+
 /* ========== Structs ========== */
 
   struct TokenAdapter {
@@ -32,6 +40,22 @@ interface IAdapterRegistry {
 
   function protocolAdapterIds(address protocolAdapter) external view returns (uint256 id);
 
+  function vaultsByUnderlying(address underlying) external view returns (address vault);
+
+  function approvedVaultFactories(address factory) external view returns (bool approved);
+
+/* ========== Vault Factory Management ========== */
+
+  function addVaultFactory(address _factory) external;
+
+  function removeVaultFactory(address _factory) external;
+
+/* ========== Vault Management ========== */
+
+  function addVault(address vault) external;
+
+  function removeVault(address vault) external;
+
 /* ========== Protocol Adapter Management ========== */
 
   function addProtocolAdapter(address protocolAdapter) external returns (uint256 id);
@@ -45,6 +69,12 @@ interface IAdapterRegistry {
   function addTokenAdapters(address[] calldata adapters) external;
 
   function removeTokenAdapter(address adapter) external;
+
+/* ========== Vault Queries ========== */
+
+  function getVaultsList() external view returns (address[] memory);
+
+  function haveVaultFor(address underlying) external view returns (bool);
 
 /* ========== Protocol Queries ========== */
 

@@ -8,11 +8,8 @@ import "../vaults/NirnVault.sol";
 contract TestNirnVault is NirnVault {
   constructor(
     address _registry,
-    address _eoaSafeCaller,
-    address _underlying,
-    address _rewardsSeller,
-    address _feeRecipient
-  ) NirnVault(_registry, _eoaSafeCaller, _underlying, _rewardsSeller, _feeRecipient) {}
+    address _eoaSafeCaller
+  ) NirnVault(_registry, _eoaSafeCaller) {}
 
   function setAdaptersAndWeightsInternal(
     IErc20Adapter[] calldata adapters,
@@ -42,14 +39,6 @@ contract TestNirnVault is NirnVault {
       amount,
       newReserves
     );
-  }
-
-  function currentDistributionInternal() external view returns (
-    DistributionParameters memory params,
-    uint256 totalProductiveBalance,
-    uint256 _reserveBalance
-  ) {
-    return currentDistribution();
   }
 
   function balanceSheetInternal() external view returns (BalanceSheet memory) {

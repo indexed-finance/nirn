@@ -57,8 +57,10 @@
   "scripts": {
     "lint": "hardhat check",
     "compile": "hardhat compile",
-    "coverage:registry": "hardhat coverage --solcoverjs .registry.solcover.js --testfiles \"test/AdapterRegistry.spec.ts\"",
+    "coverage:batcher": "hardhat coverage --testfiles \"test/BatchRebalancer.spec.ts\"",
+    "coverage:registry": "hardhat coverage --solcoverjs .solcover.registry.js --testfiles \"test/AdapterRegistry.spec.ts\"",
     "coverage:vault": "hardhat coverage --testfiles \"test/NirnVault.spec.ts\"",
+    "coverage:factory": "hardhat coverage --testfiles \"test/NirnVaultFactory.spec.ts\"",
     "generate-tests": "yarn test test/TestMapper.spec.ts",
     "test": "hardhat test"
   },
