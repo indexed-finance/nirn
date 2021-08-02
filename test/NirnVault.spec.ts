@@ -74,6 +74,13 @@ describe('NirnVault', () => {
       ).to.be.revertedWith('already initialized')
     })
 
+    it('Should revert if feeRecipient null', async () => {
+      const newVault = await deployClone(implementation)
+      await expect(
+        newVault.initialize(underlying.address, constants.AddressZero, constants.AddressZero, wallet.address)
+      ).to.be.revertedWith('null address')
+    })
+
     it('Should add wrapper to lockedTokens', async () => {
       expect(await vault.lockedTokens(wrapper1.address)).to.be.true
     })
@@ -443,6 +450,12 @@ describe('NirnVault', () => {
         await expect(
           vault.connect(wallet1).setFeeRecipient(constants.AddressZero)
         ).to.be.revertedWith('!owner')
+      })
+
+      it('Should revert if address is null', async () => {
+        await expect(
+          vault.setFeeRecipient(constants.AddressZero)
+        ).to.be.revertedWith('null address')
       })
 
       it('Should let owner set fee recipient', async () => {
