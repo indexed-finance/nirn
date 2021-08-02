@@ -281,17 +281,25 @@ abstract contract NirnVaultBase is ERC20, OwnableProxyImplementation(), INirnVau
     claimFees(balance(), totalSupply);
   }
 
+  function balanceAndSupplyWithFee() internal view returns (uint256 totalBalance, uint256 supply) {
+    totalBalance = balance();
+    supply = totalSupply;
+    uint256 pendingFees = calculateFee(totalBalance, supply);
+    if (pendingFees > 0) {
+      uint256 equivalentShares = pendingFees.mul(supply) / totalBalance.sub(pendingFees);
+      supply = supply.add(equivalentShares);
+    }
+  }
+
 /* ========== Price Queries ========== */
 
   function getPricePerFullShare() external view override returns (uint256) {
     return balance().toFractionE18(totalSupply);
   }
 
-  function getPricePerFullShareWithFee() external view override returns (uint256) {
-    uint256 totalBalance = balance();
-    uint256 supply = totalSupply;
-    uint256 pendingFees = calculateFee(totalBalance, supply);
-    return totalBalance.sub(pendingFees).toFractionE18(supply);
+  function getPricePerFullShareWithFee() public view override returns (uint256) {
+    (uint256 totalBalance, uint256 supply) = balanceAndSupplyWithFee();
+    return totalBalance.toFractionE18(supply);
   }
 
 /* ========== Update Hooks ========== */

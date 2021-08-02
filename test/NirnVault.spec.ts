@@ -96,8 +96,8 @@ describe('NirnVault', () => {
       expect(await vault.priceAtLastFee()).to.eq(ONE_E18)
     })
 
-    it('Should set performanceFee to 5%', async () => {
-      expect(await vault.performanceFee()).to.eq(getBigNumber(5, 16))
+    it('Should set performanceFee to 10%', async () => {
+      expect(await vault.performanceFee()).to.eq(getBigNumber(1, 17))
     })
 
     it('Should set name to Indexed {underlying.name()}', async () => {
@@ -426,7 +426,7 @@ describe('NirnVault', () => {
 
       it('Should claim current fees before changing performanceFee', async () => {
         await underlying.mint(vault.address, getBigNumber(10))
-        const fees = getBigNumber(10).mul(getBigNumber(5, 16)).div(getBigNumber(1))
+        const fees = getBigNumber(10).mul(getBigNumber(1, 17)).div(getBigNumber(1))
         const feeShares = fees.mul(TEN_E18).div(getBigNumber(20).sub(fees))
         await expect(
           vault.setPerformanceFee(getBigNumber(1, 17))
@@ -604,7 +604,7 @@ describe('NirnVault', () => {
     it('Should claim fees before deposit', async () => {
       await deposit(TEN_E18)
       await underlying.mint(vault.address, TEN_E18)
-      const fees = getBigNumber(5, 17)
+      const fees = getBigNumber(1)
       const feeShares = fees.mul(TEN_E18).div(getBigNumber(195, 17))
       const shares = TEN_E18
         .mul(TEN_E18.add(feeShares))
@@ -668,7 +668,7 @@ describe('NirnVault', () => {
     it('Should claim fees if any are owed', async () => {
       await underlying.mint(vault.address, TEN_E18)
       await vault.rebalance()
-      const fees = getBigNumber(5, 17)
+      const fees = getBigNumber(1)
       const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(195, 17))
       const underlyingWithdrawn = FIVE_E18.mul(getBigNumber(20)).div(TEN_E18.add(sharesForFees))
       const newReserves = toReserve(getBigNumber(20).sub(underlyingWithdrawn))
@@ -756,7 +756,7 @@ describe('NirnVault', () => {
       await underlying.mint(vault.address, TEN_E18)
       await vault.rebalance()
       const amount = FIVE_E18
-      const fees = getBigNumber(5, 17)
+      const fees = getBigNumber(1)
       const sharesForFees = fees.mul(TEN_E18).div(getBigNumber(195, 17))
       const newReserves = toReserve(getBigNumber(15))
       const underlyingWithdrawn = amount.add(newReserves).sub(getBigNumber(2))
@@ -830,7 +830,7 @@ describe('NirnVault', () => {
 
       it('Should return performance fee times profit since last claim', async () => {
         await underlying.mint(vault.address, getBigNumber(10))
-        expect(await vault.getPendingFees()).to.eq(getBigNumber(5, 17))
+        expect(await vault.getPendingFees()).to.eq(getBigNumber(1))
       })
     })
   })
