@@ -188,15 +188,7 @@ contract NirnVault is NirnVaultBase {
     setAdaptersAndWeights(params.adapters, proposedWeights);
   }
 
-  struct DistributionParameters {
-    IErc20Adapter[] adapters;
-    uint256[] weights;
-    uint256[] balances;
-    int256[] liquidityDeltas;
-    uint256 netAPR;
-  }
-
-  function currentDistribution() internal view returns (
+  function currentDistribution() public view override returns (
     DistributionParameters memory params,
     uint256 totalProductiveBalance,
     uint256 _reserveBalance

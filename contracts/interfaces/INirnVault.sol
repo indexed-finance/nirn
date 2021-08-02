@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
+pragma abicoder v2;
 
 import "./IAdapterRegistry.sol";
 import "./ITokenAdapter.sol";
@@ -41,6 +42,16 @@ interface INirnVault {
 
   /** @dev Emitted when a deposit is made. */
   event Withdrawal(uint256 shares, uint256 underlying);
+
+/* ========== Structs ========== */
+
+  struct DistributionParameters {
+    IErc20Adapter[] adapters;
+    uint256[] weights;
+    uint256[] balances;
+    int256[] liquidityDeltas;
+    uint256 netAPR;
+  }
 
 /* ========== Initializer ========== */
 
@@ -129,6 +140,12 @@ interface INirnVault {
   function getCurrentLiquidityDeltas() external view returns (int256[] memory liquidityDeltas);
 
   function getAPR() external view returns (uint256);
+
+  function currentDistribution() external view returns (
+    DistributionParameters memory params,
+    uint256 totalProductiveBalance,
+    uint256 _reserveBalance
+  );
 
 /* ========== Deposit/Withdraw ========== */
 

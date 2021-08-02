@@ -41,14 +41,6 @@ contract TestNirnVault is NirnVault {
     );
   }
 
-  function currentDistributionInternal() external view returns (
-    DistributionParameters memory params,
-    uint256 totalProductiveBalance,
-    uint256 _reserveBalance
-  ) {
-    return currentDistribution();
-  }
-
   function balanceSheetInternal() external view returns (BalanceSheet memory) {
     (IErc20Adapter[] memory adapters,) = getAdaptersAndWeights();
     return getBalanceSheet(adapters);
