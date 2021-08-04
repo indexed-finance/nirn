@@ -6,7 +6,7 @@ Conceptually, Nirn is similar to Yearn's [iTokens](https://github.com/yearn/itok
 
 Each Nirn vault can split its capital among several lending markets, and does not use permissioned rebalancer accounts to determine how it is split. Instead, optimal allocations can be calculated off-chain by anyone and suggested to the vault contract, which then verifies that the suggested rebalance would increase the vault's net interest rate. This both prevents any reliance on the developers of Indexed and ensures that if a better allocation of capital is possible, anyone can make the vault use it.
 
-Whitepaper available [here](https://github.com/indexed-finance/nirn-whitepaper/blob/main/Nirn_Whitepaper.pdf) (current version V1.0, updated 2nd August 2021).
+Whitepaper available [here](https://github.com/indexed-finance/nirn-whitepaper/blob/main/Nirn_Whitepaper.pdf) (current version V1.0, updated 4th August 2021).
 
 # Testing
 
